@@ -1,0 +1,234 @@
+/* Shared workbench presentation. Solid surfaces, no compositor effects or
+   decorative animation; suitable for software rendering and remote desktops. */
+html[data-theme="classic-black"] {
+  --page:#16181c;--panel:#1d2025;--surface:#24282e;--surface-muted:#2c3139;
+  --surface-user:#282f38;--text:#e3e7ed;--muted:#a5aeba;--soft:#89939f;
+  --border:#30353d;--border-strong:#49525e;--code:#16181c;
+  --accent:#8ab4f8;--accent-rgb:138,180,248;--link:#9cc2ff;
+}
+html[data-theme="white"] {
+  --page:#ffffff;--panel:#f3f5f7;--surface:#ffffff;--surface-muted:#e9edf2;
+  --surface-user:#edf2f8;--text:#263244;--muted:#59677b;--soft:#6b788a;
+  --border:#e0e5ec;--border-strong:#b7c3d2;--code:#ffffff;
+}
+html[data-theme] body {background:var(--panel)}
+html[data-theme] body::before,html[data-theme] body::after {display:none}
+html[data-theme] :is(button,.login,.login form,.brand-mark,dialog,.request) {
+  background-image:none;box-shadow:none;text-shadow:none;
+}
+html[data-theme] dialog::backdrop {backdrop-filter:none;background:#0006}
+html[data-theme] .login {background:var(--panel)}
+html[data-theme] .login form,html[data-theme] dialog {background:var(--surface);border-color:var(--border-strong);border-radius:14px}
+html[data-theme] .login input {background:var(--page);color:var(--text)}
+html[data-theme] .login h1 {color:var(--text);text-transform:none;letter-spacing:0}
+html[data-theme] .login button[type="submit"] {background:var(--accent);color:var(--page);letter-spacing:0}
+html[data-theme] #sessions button {transition:none;transform:none}
+html[data-theme] .turn-thinking span {
+  animation:none;background:none;color:var(--muted);-webkit-text-fill-color:currentColor;text-shadow:none;
+}
+html[data-theme] :is(.activity-entry>summary,.file-change-header)::after {transition:none}
+html[data-theme] :is(.sent-images img,.request,.file-change-card,.theme-menu,.session-menu,#accountPanel,#directoryDropdown,#quickOpenDialog) {box-shadow:none}
+html[data-theme] .steering {box-shadow:none!important}
+html[data-theme] .steering #send {background:var(--violet)!important}
+
+/* The navigation stays compact; content and writing controls get more room. */
+#app {grid-template-rows:52px minmax(0,1fr) 26px;grid-template-columns:56px min(var(--sidebar-width,240px),45vw) minmax(0,1fr);background:var(--panel)}
+#app.sidebar-collapsed {grid-template-columns:56px 0 minmax(0,1fr)}
+#windowTitle {padding:0 18px;gap:14px;border-bottom:0;background:var(--panel)}
+.window-brand {font-size:24px;color:var(--accent)}
+.window-name {font-size:14px;font-weight:650;color:var(--text)}
+#windowTitle .workspace {max-width:560px}
+#windowTitle #workspaceButton {height:32px;margin:0;padding:4px 14px;border:1px solid var(--border);border-radius:8px;background:var(--page);font:13px/22px system-ui;color:var(--text)}
+#accountButton,#reloadCodex {height:32px;padding:4px 8px;border-radius:8px;font-size:13px}
+#accountPanel {top:54px;border-radius:12px;padding:18px}
+#directoryDropdown {border-radius:12px;padding:14px}
+#activityBar {border:0;padding:6px;background:var(--panel);gap:6px}
+#activityBar>button,#activityBar #themeButton {width:44px;height:42px;padding:11px;border:0;border-radius:10px}
+#activityBar>button[aria-pressed=true] {background:var(--surface-muted);color:var(--accent)}
+#activityBar svg,#activityChat img {width:22px;height:22px}
+#activityBar .theme-menu {left:48px;border-radius:10px}
+#sidebar {padding:0 12px 10px;background:var(--panel);border-right:0}
+#sidebar .sidebar-brand {height:46px;padding:12px 8px;font:600 14px/22px system-ui;letter-spacing:0}
+#sidebar .sidebar-action {padding:9px 10px;border-radius:8px;font-size:14px}
+#sidebar #sessionSearch {padding:8px 10px;border-radius:8px;font-size:13px}
+#sidebar .session-tab {border-radius:7px}
+#sidebar #sessions button {padding-top:10px;padding-bottom:10px;border-radius:8px;font-size:14px}
+#sidebar .sidebar-footer {border-top:0}
+#workbench {--code-width:58%;padding:0 10px 0 0}
+#codeArea {border:1px solid var(--border);border-radius:12px;overflow:hidden}
+#fileExplorer {background:var(--panel)}
+#filesView>.code-toolbar,#gitView>.code-toolbar {height:46px;min-height:46px;border-bottom:0;padding:10px 14px}
+#fileExplorer strong,#gitView strong {font:600 13px system-ui;letter-spacing:0}
+#editorWorkspace {height:32px;max-height:32px;padding:6px 14px;background:transparent;color:var(--muted)}
+#fileTree {padding:4px 6px}
+#fileTree button,#fileTree summary {min-height:28px;padding:3px 8px;border-radius:6px;font:13px/22px system-ui}
+#fileTree button::before,#editorTabs button[role=tab]::before {content:'·';color:var(--muted)}
+.pane-resize {background:transparent}
+#chatResize {flex-basis:8px}
+#treeResize {flex-basis:1px;background:var(--border)}
+html[data-theme] #editorPane,html[data-theme] .editor-tab.active,html[data-theme] #editorPane>.code-toolbar {background:var(--page);color:var(--text)}
+#editorHeader,#editorTabs {height:42px;min-height:42px;background:var(--panel)}
+.editor-tab {border:0;border-radius:8px 8px 0 0;margin:5px 2px 0;background:transparent}
+.editor-tab.active {box-shadow:inset 0 2px var(--accent)}
+#editorTabs button {font-size:13px}
+#editorHeader #layoutControls {border:0}
+#editorPane>.code-toolbar {height:36px;min-height:36px;padding:4px 12px}
+html[data-theme] #editorPane>.code-toolbar button {color:var(--muted);border-radius:6px;padding:4px 7px}
+html[data-theme] #editorEmpty {gap:12px;color:var(--muted)}
+html[data-theme] .editor-welcome-icon {font-size:64px;color:var(--border-strong);letter-spacing:-8px;padding-right:8px}
+html[data-theme] #editorEmpty strong {font-size:24px;font-weight:600;letter-spacing:-.6px;color:var(--text)}
+.editor-shortcuts {font-size:12px}
+.editor-shortcuts kbd {border-color:var(--border-strong);color:var(--muted);padding:2px 6px;border-radius:4px}
+#workbench>#chat {border:1px solid var(--border);border-radius:12px;background:var(--page);overflow:hidden}
+html[data-theme] #chat #messages {background:var(--page)}
+#chat .chat-toolbar {height:46px;min-height:46px;padding:10px 18px;background:var(--page);border:0}
+#chat .chat-section-label {font:650 14px system-ui;letter-spacing:1px}
+#chat #chatTitle {font-size:12px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chat #messages {padding:24px 24px 32px;font-size:15px}
+#chat .markdown {font-size:15px;line-height:1.8}
+#chat #empty {padding:clamp(40px,12vh,130px) 20px 30px;font-size:15px;line-height:1.9;max-width:420px;margin:0 auto;color:var(--muted)}
+#chat .message.user {border:0;border-radius:14px;padding:14px 16px;background:var(--surface-user)}
+html[data-theme] #chat #composer {width:calc(100% - 32px);margin:8px 16px 16px;padding:12px;border:1px solid var(--border-strong);border-radius:16px;background:var(--surface);box-shadow:none}
+html[data-theme] #chat #composer:focus-within {border-color:var(--accent);box-shadow:none}
+#chat #questionDialog {width:calc(100% - 32px);margin:8px 16px 0;padding:14px 16px}
+#chat #questionDialog .question-heading h2 {font-size:15px}
+#chat #questionDialog .question-hint {margin-bottom:12px}
+#chat #composer textarea {font-size:15px;line-height:1.7;min-height:78px;padding:6px;color:var(--text)}
+html[data-theme] #composer textarea::placeholder {color:var(--muted)}
+#chat #composer .composebar {gap:6px;row-gap:8px}
+#chat #composer select {font-size:12px;max-width:160px;color:var(--muted)}
+#chat #composer .send-actions {padding-left:6px;border:0}
+html[data-theme] #chat #composer .send-actions button {width:32px;height:32px;border:0;border-radius:10px;background:var(--accent);color:var(--page);box-shadow:none}
+#chat #composer #fastMode {font-size:12px;padding:4px 5px}
+#chat .code-block,#chat .file-change-card {border-radius:10px}
+#workbenchStatus {border:0;background:var(--panel);color:var(--muted);font-size:11px;gap:12px}
+.remote-indicator {background:transparent;color:var(--accent);width:44px}
+#workbenchStatus #status {color:var(--muted)}
+html[data-theme] body :where(button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled),a[href],summary,[role="button"]:not([aria-disabled="true"]),[role="tab"]:not([aria-disabled="true"])):is(:hover,:focus-visible) {box-shadow:none!important}
+/* Focus remains explicit for keyboard navigation without drawing a box on hover. */
+html[data-theme] :is(button,select,input,textarea,summary,a[href]):focus-visible {outline:2px solid var(--accent);outline-offset:-2px}
+/* The composer border indicates focus; keep its transparent typing area clear. */
+html[data-theme] #chat #composer textarea:is(:hover,:focus) {outline:none;box-shadow:none;background:transparent!important}
+@supports (caret-animation:manual) {
+  @media (prefers-reduced-motion:no-preference) {
+    #chat #composer textarea:focus {caret-animation:manual;animation:composer-caret-blink .4s step-end infinite}
+  }
+}
+@keyframes composer-caret-blink {
+  0%,100% {caret-color:currentColor}
+  50% {caret-color:transparent}
+}
+@media(max-width:1100px) and (min-width:1001px) {
+  #chat #messages {padding:18px 16px}
+  #chat #composer {width:calc(100% - 20px);margin:8px 10px 10px;padding:8px}
+}
+@media(max-width:1000px) {
+  #workbench {padding:0 8px 0 0}
+  #codeArea {flex-basis:48%}
+  #workbench>#chat {min-height:0}
+}
+@media(max-width:700px) {
+  #app,#app.sidebar-collapsed {grid-template-columns:0 0 minmax(0,1fr);grid-template-rows:48px minmax(0,1fr) 24px}
+  #windowTitle {padding:0 124px 0 8px;gap:4px}
+  #windowTitle #workspaceButton {font-size:12px;padding:4px 6px}
+  #activityBar {height:48px;right:3px;gap:0;padding:3px 0;background:transparent}
+  #activityBar>button,#activityBar #themeButton {width:29px;height:40px;padding:7px;border:0;border-radius:7px}
+  #activityBar svg {width:18px;height:18px}
+  #activityBar .theme-menu {left:auto;top:46px}
+  #accountControls {gap:0}
+  #accountButton,#reloadCodex {padding:2px 3px;font-size:11px}
+  #authUser {max-width:48px}
+  #windowTitle .window-brand {display:none}
+  #accountPanel,#directoryDropdown {top:50px}
+  #sidebar {inset:48px auto 24px 0;box-shadow:none;border-right:1px solid var(--border)}
+  #workbench {padding:0}
+  #workbench>#chat,#codeArea {border:0;border-radius:0}
+  #chat .chat-toolbar {height:42px;min-height:42px;padding:8px 16px}
+  #chat #messages {padding:18px 16px}
+  html[data-theme] #chat #composer {width:calc(100% - 20px);margin:6px 10px 10px;padding:10px;border-radius:14px}
+  #chat #questionDialog {width:calc(100% - 20px);margin:6px 10px 0;padding:12px}
+  #chat #composer .composebar {display:grid;grid-template-columns:auto auto auto 1fr auto;gap:6px}
+  #chat #composer .composer-settings {grid-row:2;grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:flex-end;margin:0;border-top:1px solid var(--border);padding-top:6px}
+  #chat #composer .send-actions {grid-column:5;grid-row:1}
+  #chat #composer select {max-width:145px}
+}
+
+/* Consistent local vector icons; no font, library or remote requests. */
+:root {
+  --icon-file:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%203h8l4%204v14H6Z%20M14%203v5h4%20M9%2012h6%20M9%2016h6%22%2F%3E%3C%2Fsvg%3E");
+  --icon-folder:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%206h7l2%202h9v12H3Z%22%2F%3E%3C%2Fsvg%3E");
+  --icon-close:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%206l12%2012%20M18%206%206%2018%22%2F%3E%3C%2Fsvg%3E");
+  --icon-terminal:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m5%207%205%205-5%205%20M13%2017h6%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.ui-icon {display:block;width:18px;height:18px;flex:0 0 18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.window-brand .ui-icon {width:24px;height:24px}
+#sidebar #newSession {gap:9px;color:var(--text)}
+#sidebar .sidebar-heading #sessionList,#refreshTree,#refreshGit {display:grid;place-items:center;width:30px;height:30px;padding:6px;border-radius:7px}
+#directoryDropdown #closeDirectory,#closeGitDiff {display:grid;place-items:center;width:28px;height:28px;padding:5px}
+html[data-theme] .editor-welcome-icon {padding:16px;border:1px solid var(--border);border-radius:18px;background:var(--panel)}
+.editor-welcome-icon .ui-icon {width:36px;height:36px;stroke-width:1.2;color:var(--muted)}
+#fileTree button::before,#editorTabs button[role=tab]::before {content:'';display:inline-block;vertical-align:-3px;width:16px;height:16px;margin-right:7px;background:currentColor;mask:var(--icon-file) center/contain no-repeat;color:var(--muted)}
+#fileTree summary {position:relative;padding-left:26px}
+#fileTree summary::before,#fileTree details[open]>summary::before {content:'';display:inline-block;width:16px;height:16px;vertical-align:-3px;margin-right:7px;background:currentColor;mask:var(--icon-folder) center/contain no-repeat;color:var(--muted)}
+#fileTree summary::after {content:'';position:absolute;left:10px;top:12px;width:5px;height:5px;border:solid var(--muted);border-width:1px 1px 0 0;transform:rotate(45deg)}
+#fileTree details[open]>summary::after {transform:rotate(135deg);top:10px}
+#editorTabs .tab-close {display:grid;place-items:center;min-width:28px}
+.tab-close::before {content:'';display:block;width:14px;height:14px;background:currentColor;mask:var(--icon-close) center/contain no-repeat}
+#editorPane {container-type:inline-size}
+#editorPane>.code-toolbar {height:auto;min-height:42px;padding:6px 10px;gap:12px;flex-wrap:wrap}
+#editorPath {font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted)}
+.editor-actions {display:flex;align-items:center;gap:4px;flex-shrink:0}
+html[data-theme] #editorPane>.code-toolbar button {display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:30px;height:30px;padding:5px 7px;font-size:12px}
+.code-toolbar .ui-label {flex:initial}
+html[data-theme] #editorPane>.code-toolbar #askCodex:not(:disabled) {color:var(--accent)}
+html[data-theme] #editorPane>.code-toolbar #saveFile:not(:disabled) {color:var(--text);background:var(--surface-muted)}
+#editorPane>.code-toolbar #reloadFile {margin-left:3px}
+@container (max-width:480px) {
+  #editorPane>.code-toolbar {gap:6px}
+  .editor-actions .ui-label {display:none}
+}
+/* Comfortable reading with a separate, quieter execution history. */
+#chat .turn {margin-bottom:36px}
+#chat .turn+.turn {padding-top:8px}
+#chat .turn-user {margin-bottom:22px}
+#chat .message.user {max-width:90%;font-size:15px;line-height:1.75;border-radius:14px 14px 4px 14px}
+#chat .markdown {line-height:1.8;letter-spacing:.01em}
+#chat .markdown p {margin:0 0 14px}
+#chat .markdown :is(h1,h2,h3,h4,h5,h6) {margin:26px 0 12px;font-weight:650;line-height:1.45;letter-spacing:0}
+#chat .markdown h1 {font-size:22px}
+#chat .markdown h2 {font-size:19px}
+#chat .markdown h3 {font-size:17px}
+#chat .markdown>:first-child {margin-top:0}
+#chat .markdown>:last-child {margin-bottom:0}
+#chat .markdown :is(ul,ol) {padding-left:23px;margin:10px 0 16px}
+#chat .markdown li {margin:6px 0}
+#chat .markdown li>p {margin-bottom:6px}
+#chat .markdown blockquote {border-left:2px solid var(--border-strong);padding:3px 0 3px 16px;margin:18px 0;color:var(--muted)}
+html[data-theme] #chat .markdown code {border:0;padding:2px 5px;border-radius:4px;background:var(--surface-muted);color:var(--text)}
+#chat .markdown a {text-underline-offset:3px;text-decoration-thickness:1px}
+html[data-theme] #chat .code-block {margin:18px 0;border:1px solid var(--border);background:var(--code);box-shadow:none}
+html[data-theme] #chat .code-block-header {height:38px;padding:0 9px 0 15px;background:var(--panel);border-color:var(--border);color:var(--muted)}
+#chat .code-block pre {padding:16px;font-size:13px;line-height:1.7;tab-size:4}
+html[data-theme] #chat .code-block pre code {padding:0;background:transparent;color:inherit;font:inherit}
+html[data-theme] #chat .table-wrap {margin:18px 0;border-radius:10px;background:var(--page);border-color:var(--border);box-shadow:none}
+html[data-theme] #chat .markdown :is(th,td) {padding:10px 12px;border-right:0;border-color:var(--border)}
+html[data-theme] #chat .markdown th {background:var(--panel);font-size:13px;color:var(--muted)}
+html[data-theme] #chat .turn-activity {font-size:13px;color:var(--muted);margin-bottom:12px}
+#chat .turn-activity>summary {padding:7px 0}
+#chat .activity-list {gap:12px;border-left:1px solid var(--border);margin:10px 0 4px 7px;padding-left:14px}
+#chat .progress-message .markdown {font-size:14px;color:var(--muted)}
+#chat .activity-entry>summary {padding-top:6px;padding-bottom:6px}
+#chat .activity-entry>summary::before {content:'';border:0;width:16px;height:16px;flex-basis:16px;background:currentColor;mask:var(--icon-terminal) center/contain no-repeat}
+html[data-theme] #chat .activity-body {background:var(--panel);border-color:var(--border);border-radius:8px;padding:12px;color:var(--muted)}
+#chat .turn-status {font-size:12px;border:0;color:var(--muted);margin:4px 0 14px;padding-bottom:8px}
+html[data-theme] #chat .message.assistant>.role {color:var(--muted);text-transform:none;letter-spacing:0;font-size:13px}
+#chat .turn-duration {font-size:12px;color:var(--muted)}
+#chat .message-actions {margin-top:14px;gap:4px}
+#chat .message.file-change .file-change-card[open] {border-color:var(--border)}
+#chat .changed-file {padding:10px 0}
+@media(max-width:700px) {
+  #chat .turn {margin-bottom:28px}
+  #chat .message.user {max-width:94%}
+  #chat .code-block pre {padding:12px}
+}

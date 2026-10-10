@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+config.yaml
+codex-web.service
+data/
+*.log
+*.py[cod]
+.env
+.env.*
+!.env.example
+
+node_modules/

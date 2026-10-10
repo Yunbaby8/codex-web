@@ -1,0 +1,256 @@
+/* Keep the existing session sidebar and chat; the workbench fills their old chat slot. */
+#workbench{display:flex;min-width:0;min-height:0;overflow:hidden;--code-width:56%}
+#workbench>#chat{flex:1;min-width:320px}
+#codeArea{display:flex;flex:0 0 var(--code-width);min-width:300px;max-width:calc(100% - 326px);min-height:0;background:var(--page)}
+#fileExplorer{flex:0 0 min(var(--sidebar-width,240px),45vw);min-width:0;display:flex;flex-direction:column;background:var(--panel);overflow:hidden}
+.code-toolbar{display:flex;align-items:center;gap:6px;min-height:38px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:13px;flex-shrink:0}
+.code-toolbar strong,.code-toolbar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.code-toolbar button{padding:3px 7px;font-size:13px;white-space:nowrap}
+#editorWorkspace{font:12px/1.5 monospace;padding:8px;overflow-wrap:anywhere;color:var(--muted);max-height:90px;overflow:auto}
+#fileTree{flex:1;min-height:0;overflow:auto;padding:6px;font-size:13px}
+#fileTree button,#fileTree summary{display:block;max-width:100%;width:100%;text-align:left;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;border:0;border-radius:3px;background:transparent;color:var(--text);padding:4px 6px;font:13px/1.6 monospace;cursor:pointer;box-shadow:none}
+#fileTree summary::before{content:'▸ ';color:var(--muted)}#fileTree details[open]>summary::before{content:'▾ '}
+#fileTree button:hover,#fileTree summary:hover{background:var(--surface-muted)}
+.tree-children{padding-left:12px}
+.pane-resize{flex:0 0 5px;background:var(--border);cursor:col-resize;touch-action:none;z-index:2}
+.pane-resize:hover,.pane-resize:focus{background:var(--accent)}
+#editorPane{position:relative;flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#1e1e1e}
+#editorTabs{display:flex;flex-shrink:0;min-height:37px;overflow:auto;background:var(--panel)}
+.editor-tab{display:flex;flex-shrink:0;border-right:1px solid var(--border);border-top:2px solid transparent}
+.editor-tab.active{border-top-color:var(--accent);background:var(--surface)}
+#editorTabs button{background:transparent;color:var(--text);border:0;border-radius:0;padding:5px 8px;font:13px/1.5 monospace;box-shadow:none}
+#editorTabs button[role=tab]{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#editorNotice{font-size:13px;color:#e6b85c;padding:0 8px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:110px;overflow:auto}
+#editorNotice:not(:empty){padding:8px}
+#monacoHost{flex:1;min-height:0;min-width:0;overflow:hidden}
+#monacoHost[hidden],#editorEmpty[hidden]{display:none}
+#editorEmpty{margin:auto;padding:24px;text-align:center;font-size:14px;color:#9d9d9d}
+#workbench.code-hidden #codeArea,#workbench.code-hidden #chatResize{display:none}
+#workbench #composer .composebar{flex-wrap:wrap;gap:6px}#workbench #composer .composer-settings{flex:1}
+@media(max-width:1000px){
+  #workbench{flex-direction:column}#workbench>#chat{min-width:0;min-height:250px}
+  #codeArea{flex:0 0 48%;width:100%;max-width:none;min-width:0;overflow:hidden}
+  #chatResize{display:none}
+}
+
+/* VS Code workbench geometry, shared by both color themes. */
+#app{grid-template-columns:48px min(var(--sidebar-width,240px),45vw) minmax(0,1fr);grid-template-rows:35px minmax(0,1fr) 23px;background:var(--page)}
+#app.sidebar-collapsed{grid-template-columns:48px 0 minmax(0,1fr)}
+#windowTitle{grid-column:1/-1;grid-row:1;display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--panel);font-size:13px;min-width:0;z-index:25}
+.window-brand{color:var(--link);font-size:21px}.window-name,.window-platform{white-space:nowrap;color:var(--muted)}
+#windowTitle .workspace{flex:1;max-width:650px;margin:auto;min-width:0}
+#windowTitle #workspaceButton{height:25px;padding:1px 12px;border-radius:5px;text-align:center;font:13px/21px system-ui;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);box-shadow:none}
+#activityBar{grid-column:1;grid-row:2;display:flex;flex-direction:column;align-items:stretch;background:var(--panel);border-right:1px solid var(--border);z-index:30}
+#activityBar>button,#activityBar #themeButton{display:grid;place-items:center;width:47px;height:48px;padding:12px;margin:0;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);box-shadow:none}
+#activityBar>button:hover,#activityBar #themeButton:hover{color:var(--text);background:var(--surface-muted);filter:none}
+#activityBar>button[aria-pressed=true]{border-left-color:var(--link);color:var(--text)}
+#activityBar svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.activity-bottom{margin-top:auto}.activity-bottom .theme-control{position:relative}
+#activityBar .theme-menu{left:48px;right:auto;top:auto;bottom:4px;width:168px;z-index:100}
+#sidebar{grid-column:2;grid-row:2;position:relative;width:auto;padding:0 10px 8px;box-shadow:none;border-right:1px solid var(--border)}
+#sidebar::after{display:none}#sidebar .sidebar-brand{height:35px;padding:8px 10px;font:12px/19px system-ui;letter-spacing:1px;color:var(--text)}
+#sidebar .sidebar-action{margin:0 0 8px;padding:6px 10px;border-radius:3px;font-size:13px}
+#sidebar .sidebar-heading{padding:4px 0 8px}#sidebar .session-tab{border-radius:0}#sidebar .session-search{margin:0 0 5px}
+#sidebar #sessionSearch{border-radius:2px;padding:4px 7px}#sidebar #searchScope{margin:0 0 8px}
+#sidebar #sessions button{border-radius:0;margin:0;padding-top:7px;padding-bottom:7px;font-size:13px}
+#sidebar .sidebar-footer{flex-wrap:wrap;gap:6px;padding:10px 0 0;margin-top:8px;font-size:12px}
+#sidebar .sidebar-footer-actions{width:100%;justify-content:space-between}
+#sidebar .account-tag{border:0;border-radius:0;background:transparent;padding:0;color:var(--text)}
+#workbench{grid-column:3;grid-row:2;--code-width:67%}
+#workbench>#chat{min-width:320px;border-left:1px solid var(--border)}
+#codeArea{max-width:calc(100% - 322px)}
+#app:not(.sidebar-collapsed) #fileExplorer,#app:not(.sidebar-collapsed) #treeResize,#codeArea.explorer-hidden #fileExplorer,#codeArea.explorer-hidden #treeResize{display:none}
+#fileExplorer{background:var(--panel)}
+#fileExplorer>.code-toolbar{height:35px;min-height:35px;border-bottom:0;padding:5px 12px}
+#fileExplorer strong{font:12px system-ui;letter-spacing:1px}
+#refreshTree{border:0;border-radius:3px;background:transparent;color:var(--muted);box-shadow:none;font-size:18px;padding:0 4px}
+#editorWorkspace{height:29px;max-height:29px;padding:5px 12px;font:12px/19px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);background:var(--surface)}
+#fileTree{padding:3px 0;font:14px system-ui}
+#fileTree button,#fileTree summary{border-radius:0;font:14px/22px system-ui;padding:0 10px;min-height:22px}
+#fileTree button::before{content:'◇';display:inline-block;width:18px;color:var(--link);font:13px monospace}
+#fileTree summary::before{display:inline-block;width:18px}
+#fileTree button:focus{background:var(--surface-muted);outline:1px solid var(--accent);outline-offset:-1px}
+.pane-resize{flex-basis:3px;background:var(--border)}
+#editorTabs{min-height:35px;height:35px;background:var(--panel)}
+.editor-tab{border-top-width:1px;background:var(--surface)}
+.editor-tab.active{background:#1e1e1e;border-top-color:var(--accent)}
+#editorTabs button{font:14px system-ui;padding:5px 9px}
+#editorTabs button[role=tab]::before{content:'◇';margin-right:7px;color:var(--link)}
+#editorTabs .editor-tab>button:last-child{font-size:17px;padding:0 7px;opacity:.55}
+#editorTabs .editor-tab.active>button:last-child,#editorTabs .editor-tab:hover>button:last-child{opacity:1}
+#editorPane>.code-toolbar{min-height:29px;height:29px;padding:2px 10px;background:#1e1e1e;color:#cccccc;border:0;font:13px system-ui}
+#editorPane>.code-toolbar button{background:transparent;border:0;border-radius:2px;color:#cccccc;font-size:12px;padding:2px 6px;box-shadow:none}
+#editorPane>.code-toolbar button:hover{background:#333}
+#editorEmpty{display:flex;flex-direction:column;align-items:center;gap:14px;font:14px system-ui;color:#858585}
+.editor-welcome-icon{font:100px/1.2 monospace;color:#383838;letter-spacing:-15px;padding-right:15px}
+#editorEmpty strong{font-size:22px;font-weight:400;color:#727272}.editor-shortcuts{line-height:2.5;text-align:left}
+.editor-shortcuts kbd{display:inline-block;margin-left:20px;padding:0 6px;border:1px solid #454545;border-radius:3px;line-height:1.6;font:12px monospace;color:#aaa}
+#chat .chat-toolbar{min-height:35px;height:35px;padding:4px 10px;gap:8px;background:var(--panel)}
+#chat .chat-toolbar button{border:0;border-radius:3px;padding:2px 5px;background:transparent;color:var(--muted);font-size:13px;box-shadow:none}
+#chat .chat-section-label{font:12px system-ui;letter-spacing:1px;color:var(--text)}
+#chat #chatTitle{margin-left:auto;font:12px system-ui;color:var(--muted)}
+#chat #messages{padding:18px 16px 30px;font-size:14px}#chat #empty{font-size:14px;padding:60px 12px;color:var(--muted)}
+#chat #empty::before{display:none}
+#chat .message.user{border-radius:4px;padding:10px 12px;box-shadow:none}
+#chat #composer{width:calc(100% - 24px);margin:8px 12px 12px;padding:8px;border-radius:5px;box-shadow:none;background:var(--surface)}
+#chat #composer textarea{font-size:14px;min-height:66px;padding:5px 6px}
+#chat #composer .composebar{gap:5px}#chat #composer select{font-size:12px;max-width:140px}
+#chat #composer .send-actions{padding-left:6px}#chat #composer .send-actions button{width:27px;height:27px;border-radius:4px;box-shadow:none}
+#chat #composer #fastMode{font-size:12px;padding:3px}#chat #composer .permission span{font-size:11px}
+#chat .context-usage{width:23px;flex-basis:23px}.context-usage-ring{width:21px;height:21px}
+#chat .code-block,#chat .file-change-card{border-radius:4px;box-shadow:none}
+#workbenchStatus{grid-row:3;grid-column:1/-1;display:flex;align-items:center;gap:14px;min-width:0;padding:0 10px 0 0;background:var(--panel);border-top:1px solid var(--border);font:12px/22px system-ui;color:var(--text);z-index:25}
+#workbenchStatus>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#workbenchStatus #status{max-width:32%;color:var(--text);text-shadow:none}
+#workbenchStatus #currentSession{max-width:260px;color:var(--muted)}
+.status-spacer{flex:1}.remote-indicator{width:35px;text-align:center;background:var(--accent);color:white;font:15px/22px monospace}
+@media(max-width:1000px){
+  #codeArea{width:100%;max-width:none}
+  #workbench>#chat{min-width:0}
+}
+@media(max-width:700px){
+  #app,#app.sidebar-collapsed{grid-template-columns:0 0 minmax(0,1fr);grid-template-rows:35px minmax(0,1fr) 23px}
+  #activityBar{display:none}#windowTitle{gap:7px;padding:0 8px}.window-platform,.window-name{display:none}
+  #windowTitle .workspace{max-width:none}#windowTitle #workspaceButton{font-size:12px}
+  #sidebar{position:absolute;inset:70px auto 23px 0;width:min(var(--sidebar-width,240px),45vw);z-index:40;padding-top:8px;box-shadow:6px 0 18px #0006}
+  #workbenchStatus #currentSession{display:none}#workbenchStatus{gap:8px;font-size:11px}
+  #workbenchStatus #editorEncoding{display:none}#chat #composer{margin-bottom:8px}
+}
+@media(max-width:700px){
+  #windowTitle .workspace{margin-right:96px}
+  #activityBar{display:flex;position:absolute;top:0;right:6px;left:auto;height:35px;flex-direction:row;border:0;background:transparent}
+  #activityBar>button,#activityBar #themeButton{width:30px;height:35px;padding:7px;border-left:0;border-bottom:2px solid transparent}
+  #activityBar>button[aria-pressed=true]{border-bottom-color:var(--link)}
+  #activityBar svg{width:19px;height:19px}#activityChat{display:none!important}
+  .activity-bottom{margin:0}#activityBar .theme-menu{top:35px;bottom:auto;left:auto;right:0}
+}
+
+@media(max-width:700px){#workbench>#chat{border-left:0}}
+
+/* Layout controls stay reachable when their corresponding pane is hidden. */
+#layoutControls{display:flex;align-items:center;gap:3px;flex-shrink:0}
+#layoutControls button{display:grid;place-items:center;width:28px;height:27px;padding:3px;border:0;border-radius:4px;background:transparent;color:var(--muted);box-shadow:none}
+#layoutControls button:hover{background:var(--surface-muted);color:var(--text)}
+#layoutControls svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.3}
+#layoutControls .layout-region{fill:currentColor;stroke:none;opacity:.2}
+#layoutControls button[aria-expanded=true]{color:var(--text)}
+#layoutControls button[aria-expanded=true] .layout-region{opacity:.85}
+#editorHeader{display:flex;align-items:center;min-width:0;height:35px;flex-shrink:0;background:var(--panel)}
+#editorHeader #editorTabs{flex:1;min-width:0}
+#editorHeader #layoutControls{padding:0 3px;border-left:1px solid var(--border)}
+#workbench.chat-hidden>#chat,#workbench.chat-hidden>#chatResize{display:none}
+#workbench.chat-hidden>#codeArea{flex:1;max-width:none;width:100%}
+@media(max-width:700px){
+  #windowTitle .workspace{margin-right:0}
+  #windowTitle{padding-right:96px;gap:4px}
+  #layoutControls{gap:0}#layoutControls button{width:24px}
+}
+
+@media(max-width:1000px){#workbench.chat-hidden>#codeArea{min-height:0}}
+
+/* Workspace selection is anchored to the title-bar path, without a modal backdrop. */
+#windowTitle .workspace{position:relative}
+#directoryDropdown{position:absolute;top:calc(100% + 5px);left:0;width:100%;min-width:280px;max-height:min(520px,calc(100dvh - 60px));display:flex;flex-direction:column;gap:10px;padding:10px;background:var(--surface);border:1px solid var(--border-strong);border-radius:5px;box-shadow:0 8px 24px #0007;color:var(--text);z-index:100}
+#directoryDropdown[hidden]{display:none}
+.workspace-dropdown-heading{display:flex;align-items:center;justify-content:space-between;font-size:13px}
+#directoryDropdown #closeDirectory{padding:0 5px;border:0;background:transparent;color:var(--muted);font-size:20px;box-shadow:none}
+#directoryDropdown label{gap:4px;font-size:12px}#directoryDropdown select{width:100%;padding:4px 6px;font-size:13px;border-radius:3px}
+#directoryDropdown #directoryPath{margin:0;color:var(--muted);font-size:12px;max-height:48px;overflow:auto}
+#directoryDropdown .list{min-height:24px;max-height:300px;overflow:auto;margin:0;font-size:13px}
+#directoryDropdown .list button{margin:0;padding:5px 8px;border:0;border-radius:2px;background:transparent;color:var(--text);box-shadow:none;font-size:13px}
+#directoryDropdown .list button:hover,#directoryDropdown .list button:focus{background:var(--surface-muted)}
+#directoryDropdown .actions{justify-content:flex-end;border-top:1px solid var(--border);padding-top:8px}
+#directoryDropdown #chooseDirectory{padding:4px 10px;font-size:13px;border-radius:3px}
+@media(max-width:700px){#directoryDropdown{position:fixed;top:35px;left:8px;width:calc(100vw - 16px);min-width:0}}
+#directoryDropdown{letter-spacing:normal;text-transform:none}
+#directoryDropdown #closeDirectory{width:auto;flex:0 0 24px}
+#directoryDropdown .workspace-dropdown-heading{white-space:nowrap}
+#directoryDropdown #chooseDirectory{width:auto}
+
+html[data-theme="classic-black"] #editorPane,html[data-theme="classic-black"] .editor-tab.active,html[data-theme="classic-black"] #editorPane>.code-toolbar{background:#000000}
+
+#activityChat img{display:block;width:24px;height:24px;object-fit:contain}
+
+#sessionResize{position:absolute;top:0;right:-2px;bottom:0;width:5px;z-index:5;background:transparent}
+#sessionResize:hover,#sessionResize:focus{background:var(--accent)}
+#treeResize{position:relative}
+#treeResize::after{content:"";position:absolute;top:0;bottom:0;left:-2px;right:-2px;cursor:col-resize}
+
+@media(min-width:1001px){
+  #app.sidebar-collapsed #codeArea:not(.explorer-hidden){min-width:calc(min(var(--sidebar-width,240px),45vw) + 180px)}
+}
+
+#filesView,#gitView{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden}
+#gitView[hidden]{display:none}
+#codeArea.git-mode #filesView{display:none}
+#codeArea.git-mode #gitView{display:flex}
+#filesView>.code-toolbar,#gitView>.code-toolbar{height:35px;min-height:35px;padding:5px 12px}
+#gitView strong{font:12px system-ui;letter-spacing:1px}
+#refreshGit{border:0;background:transparent;color:var(--text);box-shadow:none;font-size:18px;padding:0 4px}
+#gitBranch{padding:6px 12px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--surface)}
+.git-readonly,#gitNotice{font-size:12px;color:var(--muted);padding:6px 12px;overflow-wrap:anywhere}
+#gitNotice:empty{display:none}
+#gitChanges{flex:1;min-height:0;overflow:auto;font-size:13px}
+#gitChanges summary{padding:5px 10px;background:var(--surface);cursor:pointer}
+#gitChanges .git-file{display:flex;align-items:center;gap:8px;width:100%;padding:5px 12px;background:transparent;color:var(--text);border:0;border-radius:0;font-size:13px;font-weight:400;box-shadow:none;text-align:left}
+#gitChanges .git-file:hover{background:var(--surface-muted)}
+.git-file>span:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.git-status{flex-shrink:0;color:#d7ba7d}.git-status-A,.git-status-new{color:#89d185}.git-status-D,.git-status-U{color:#f48771}
+#gitDiffPane{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+#gitDiffPane[hidden]{display:none}
+.git-diff-heading{display:flex;align-items:center;gap:6px;padding:3px 10px;font-size:13px;background:var(--surface)}
+#gitDiffTitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#closeGitDiff{padding:0 6px;background:transparent;color:var(--text);border:0;box-shadow:none;font-size:20px}
+.git-diff-labels{display:flex;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border)}
+.git-diff-labels span{width:50%;padding:4px 12px}
+#gitDiffHost{flex:1;min-height:0;overflow:hidden}
+@media(max-width:700px){#windowTitle{padding-right:126px}}
+
+#workbenchStatus #statusBranch{max-width:32%;flex-shrink:1;min-width:0;color:var(--text)}
+
+html[data-theme="tech"] #editorPane,html[data-theme="tech"] .editor-tab.active,html[data-theme="tech"] #editorPane>.code-toolbar{background:var(--page);color:var(--text)}
+html[data-theme="tech"] #editorPane>.code-toolbar button{color:var(--muted)}
+html[data-theme="tech"] #editorEmpty,html[data-theme="tech"] #editorEmpty strong{color:var(--muted)}
+html[data-theme="tech"] .editor-welcome-icon{color:#263b55}
+
+html:is([data-theme="white"],[data-theme="green"],[data-theme="red"],[data-theme="yellow"],[data-theme="beige"]) #editorPane,html:is([data-theme="white"],[data-theme="green"],[data-theme="red"],[data-theme="yellow"],[data-theme="beige"]) .editor-tab.active,html:is([data-theme="white"],[data-theme="green"],[data-theme="red"],[data-theme="yellow"],[data-theme="beige"]) #editorPane>.code-toolbar{background:var(--page);color:var(--text)}
+html:is([data-theme="white"],[data-theme="green"],[data-theme="red"],[data-theme="yellow"],[data-theme="beige"]) #editorPane>.code-toolbar button{color:var(--muted)}
+html:is([data-theme="white"],[data-theme="green"],[data-theme="red"],[data-theme="yellow"],[data-theme="beige"]) .editor-welcome-icon{color:var(--border-strong)}
+
+/* One hover treatment across palettes; inset strokes never shift the layout.
+   Override older per-control hover colors so every control stays consistent. */
+html[data-theme] body :where(button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled),a[href],summary,[role="button"]:not([aria-disabled="true"]),[role="tab"]:not([aria-disabled="true"])):is(:hover,:focus-visible){
+  background:color-mix(in srgb,var(--text) 8%,transparent)!important;
+  color:var(--text)!important;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 22%,transparent)!important;
+  filter:none!important;
+}
+
+#quickOpenDialog{position:fixed;top:48px;bottom:auto;margin:0 auto;width:min(640px,calc(100vw - 28px));max-height:calc(100dvh - 76px);padding:8px;border:1px solid var(--border-strong);border-radius:7px;background:var(--panel);color:var(--text);box-shadow:0 12px 36px #0005}
+#quickOpenDialog::backdrop{background:#0003}
+#quickOpenInput{width:100%;padding:9px 10px;font:14px/1.5 system-ui;border:1px solid var(--border-strong);border-radius:4px;background:var(--surface);color:var(--text)}
+#quickOpenResults{max-height:min(440px,calc(100dvh - 235px));overflow:auto;margin-top:6px}
+.quick-open-result{display:flex;align-items:baseline;gap:12px;padding:6px 10px;border-radius:3px;cursor:pointer;font:13px/1.5 system-ui}
+.quick-open-result strong{font-weight:500;flex-shrink:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-open-result span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
+.quick-open-result[aria-selected="true"],.quick-open-result:hover{background:color-mix(in srgb,var(--text) 8%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 22%,transparent)}
+#quickOpenHint,.quick-open-help{margin:6px 3px 0;font:12px/1.5 system-ui;color:var(--muted)}
+
+/* Account and quota controls remain reachable in every workbench view. */
+#accountControls{display:flex;align-items:center;gap:5px;flex-shrink:0}
+#accountButton,#reloadCodex{display:flex;align-items:center;gap:4px;height:26px;padding:2px 6px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);box-shadow:none;font:12px/20px system-ui;white-space:nowrap}
+#authUser{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#accountPanel{position:fixed;top:38px;right:10px;width:min(320px,calc(100vw - 20px));padding:14px;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);border-radius:6px;box-shadow:0 12px 32px #0004;z-index:110;font:13px/1.5 system-ui}
+#accountPanel[hidden]{display:none}#quotaAccount{display:block;overflow-wrap:anywhere}
+.quota-scope,.quota-window p,#quotaUpdated{font-size:12px;color:var(--muted)}
+.quota-window{margin:16px 0}.quota-window>div,.quota-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.quota-window p{margin:4px 0}.quota-window progress{appearance:none;width:100%;height:6px;margin-top:7px;border:0;border-radius:3px;overflow:hidden;background:var(--surface-muted);color:var(--accent)}
+.quota-window progress::-webkit-progress-bar{background:var(--surface-muted)}.quota-window progress::-webkit-progress-value{background:var(--accent)}.quota-window progress::-moz-progress-bar{background:var(--accent)}
+#quotaMessage{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+#refreshQuota{padding:3px 7px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;box-shadow:none;font:12px/1.5 system-ui}
+@media(max-width:700px){#accountControls{gap:1px}#accountButton,#reloadCodex{padding:2px 3px;font-size:11px}.account-caption{display:none}#authUser{max-width:62px}#accountPanel{right:6px}}
+
+/* Git counts share the activity button without changing sidebar geometry. */
+#activityGit{position:relative}
+#gitChangeCount{position:absolute;right:2px;bottom:3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#007acc;color:#fff;box-shadow:0 0 0 1px var(--panel);font:600 11px/18px system-ui,sans-serif;text-align:center;pointer-events:none}
+#gitChangeCount[hidden]{display:none}
