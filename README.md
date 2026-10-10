@@ -12,91 +12,453 @@
 - `frontend/vendor/` 包含已生成的 Monaco 资源及第三方许可，必须保留；运行时无需安装 npm 依赖。
 - Git 不跟踪本地 `config.yaml`、`codex-web.service`、`data/`、`.venv/`、`node_modules/` 或缓存。配置示例和服务模板可提交，真实密码、令牌及登录文件不可提交。
 
-## 环境与安装
+## 部署指南的适用范围
 
-- Linux、Python 3.10+、已经登录且可工作的 Codex CLI。
-- 当前实现曾在 Codex CLI **0.154.0** 下验证；App Server 协议和实验功能可能随 CLI 版本变化，升级后应重新检查兼容性。
-- 后端运行依赖只有 FastAPI、Uvicorn、PyYAML；聊天与工作台使用浏览器原生模块，部署使用已生成的本地 Monaco 资源，运行时无需 npm 或 CDN。
-- 全新环境安装：
+以下步骤适用于 Python 3.10+ 的 Linux，Windows 用户可在 WSL2 或 Linux 虚拟机内执行。运行时需要 Git 和可工作的 Codex CLI；仅修改 Monaco 构建入口或重新生成静态资源时才需要 npm/esbuild。
 
-```bash
-git clone https://github.com/Yunbaby8/codex-web.git
-cd codex-web
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+验证范围：当前源码已通过 105 项 Linux 离线测试，含无头 Chromium、模拟 Codex 通信及 HTTP 接口；曾在 Codex CLI 0.154.0 下验证实际通信。本节的 WSL、其他发行版、代理、HTTPS 和开机启动步骤依据当前代码与相关官方文档整理，未在每一种环境中实测。CLI 升级后仍需检查 App Server 协议与实验功能兼容性。
+
+快速定位：[选择环境](#选择运行环境) · [首次安装](#首次安装) · [配置字段](#配置字段) · [环境适配](#不同环境的适配) · [后台运行](#后台运行与开机启动) · [代理](#网络代理适配) · [HTTPS](#https-反向代理) · [排查步骤](#部署后的分步检查)
+
+### 选择运行环境
+
+| 使用环境 | 后端在哪里运行 | 浏览器访问方式 | 适配范围 |
+|---|---|---|---|
+| 原生 Linux 台式机或服务器 | 自己的 Linux 用户下 | 本机 localhost，或其他电脑访问服务器 IP | 当前主要运行与测试环境 |
+| Windows + WSL2 | WSL 内的 Linux，不是 PowerShell | 本机 Windows 浏览器先尝试 localhost | 按 Linux 代码路径部署；WSL 网络与后台运行需单独配置，未实测 |
+| Windows + Linux 虚拟机 | 虚拟机中的 Linux | 虚拟机 IP，或配置虚拟机端口转发 | 根据虚拟机网络模式适配，未实测 |
+| 远程 Linux + Windows/macOS 浏览器 | 远程 Linux | 服务器 IP、SSH 隧道或 HTTPS 域名 | 浏览器不需要安装 Codex，操作发生在远程 Linux |
+| 原生 Windows / 原生 macOS 后端 | 不提供直接部署流程 | 可作为浏览器客户端 | Windows 无 `fcntl`，文件访问还使用目录文件描述符等 Linux/POSIX 机制；macOS 未验证，不承诺支持 |
+| Docker 等 Linux 容器 | 需要自行准备容器环境 | 映射端口后访问 | 仓库没有 Dockerfile 或镜像；还需适配 Codex 沙箱、登录与数据持久化，不能视为开箱即用 |
+
+本项目的后端支持范围与 Codex CLI 本身的平台支持范围不同。Windows 上可以使用 Codex CLI，不代表这个 Python Web 后端也能原生运行。
+
+## 首次安装
+
+除明确标为 PowerShell 的代码块外，命令均在**实际运行后端的 Linux/WSL 终端**执行，使用同一个普通用户。不要用 `sudo ./start.sh`：切换用户后，项目权限、Codex 登录目录和用户级服务都会发生变化。
+
+### 1. 准备 Python、Git 和 Codex
+
+Ubuntu/Debian 示例，适用于仓库软件源能提供 Python 3.10+ 的版本；其他发行版使用对应包管理器安装同类组件：
+
+```sh
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip git curl
+python3 --version
 ```
 
-Ubuntu 如果提示缺少 ensurepip，先安装与 Python 对应的 `python3-venv` 系统包；也可在已有依赖的 Python 环境中直接启动。`start.sh` 优先使用 `.venv/bin/python`，否则使用 `python3`。
+若输出版本低于 3.10，先升级到满足要求的 Python 环境，再创建虚拟环境；不要直接套用此项目到旧 Python 上。
 
-检查 CLI：
+已经能正常运行 Codex 的用户可跳过安装。未安装时，按 [OpenAI 官方 CLI 安装说明](https://learn.chatgpt.com/docs/codex/cli) 选择安装方式；当前官方提供以下 Linux 安装命令：
 
-```bash
+```sh
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+安装后按安装器提示更新 PATH 或重新打开终端，然后检查可执行文件与登录：
+
+```sh
+command -v codex
 codex --version
-codex --help
 codex app-server --help
 codex login status
 ```
 
-服务必须使用能正常运行 Codex CLI 的 Linux 用户、PATH、Codex 登录配置和网络代理，Web 不要求另填 API Key。使用自己已配置的 Codex 登录方式即可。用户级 systemd 服务不会自动继承交互终端的 `HTTP_PROXY`/`HTTPS_PROXY`；使用代理的环境必须在服务的 `[Service]` 中用 `Environment=` 显式配置，否则页面可能一直显示“正在工作”但没有输出。
+未登录时在这个 Linux 用户下执行 `codex login`，使用自己的账号完成登录。远程机器无法完成浏览器回调时，可在账号允许的前提下使用 `codex login --device-auth`，按终端提示在自己的浏览器完成操作；适用限制见 [OpenAI 官方认证说明](https://learn.chatgpt.com/docs/auth)。先确认 Codex CLI 自己能够正常使用，再排查 Web。
 
-## 配置与登录
+### 2. 下载源码并安装 Python 依赖
 
-新安装复制 `config.example.yaml` 为 `config.yaml`，填写以下配置：
+下列默认位置与服务模板一致。若改装到其他目录，后面的 systemd 路径也要一起改：
 
-- `username`、非空的 `password`：自己的网页登录凭据，与 Codex 账号密码无关。
-- `allowed_roots`：自己的 Linux 项目目录，必须已存在。
-- `allowed_origins`：浏览器实际使用的完整访问地址，包含协议和端口；从其他电脑访问时，加入服务器 IP 或域名。
-- `codex_binary`：默认从 PATH 找到 `codex`；找不到时填 `command -v codex` 返回的绝对路径，并确保 PATH 能找到它所需的 Node。
-
-密码仅保存在自己的 `config.yaml` 中，不写在源码、README 或日志中。
-
-```bash
+```sh
+mkdir -p "$HOME/work"
+git clone https://github.com/Yunbaby8/codex-web.git "$HOME/work/codex-web"
+cd "$HOME/work/codex-web"
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 cp config.example.yaml config.yaml
-# 用编辑器填写上述配置后再启动。
 chmod 600 config.yaml
+```
+
+`start.sh` 优先使用项目内的 `.venv/bin/python`，没有该文件才使用 PATH 中的 `python3`。项目已经包含 `frontend/vendor/`，只部署和运行网页时无需 `npm install`，也无需重新生成 Monaco 资源。
+
+### 3. 填写自己的配置
+
+下面以用户 `alice`、项目目录 `/home/alice/work` 为例。**把用户名、目录和密码占位内容改成自己的值**，目录必须实际存在；以下密码只是待替换文字，不是可直接使用的默认密码：
+
+```yaml
+host: 127.0.0.1
+port: 5200
+username: alice
+password: 'REPLACE_WITH_YOUR_OWN_PASSWORD'
+allowed_roots:
+  - /home/alice/work
+allowed_origins:
+  - http://127.0.0.1:5200
+  - http://localhost:5200
+codex_binary: codex
+sandbox: workspace-write
+cookie_secure: false
+models: []
+```
+
+这份配置用于先在本机验证。若其他电脑要直接访问，按后面的局域网步骤修改 `host` 与 `allowed_origins`。YAML 中的 `$HOME`、`${变量}` 不会自动替换；示例使用绝对路径最容易排查。网页登录用户名/密码与 Codex 登录是两套配置。
+
+### 4. 前台启动并登录
+
+从默认安装位置启动；安装到别处时替换 `cd` 的路径：
+
+```sh
+cd "$HOME/work/codex-web"
 ./start.sh
 ```
 
-输出：`Codex Web listening on: http://0.0.0.0:5200`。
+在本机浏览器访问 `http://127.0.0.1:5200`，用刚填写的用户名和密码登录。选择项目目录、新建会话后发送消息。前台运行时需保留终端，按 Ctrl+C 停止；长期运行按后台服务章节安装。
 
-长期运行可安装用户级 systemd 服务。模板默认项目位于 `~/work/codex-web`；先根据实际安装位置、Node/Codex 的 PATH 和代理修改自己的服务文件：
+如果看到网页但无法聊天，先检查当前 CLI 的模型权限、登录状态、网络和代理，而不是重新安装网页静态资源。
 
-```bash
-mkdir -p ~/.config/systemd/user
-cp codex-web.service.example ~/.config/systemd/user/codex-web.service
-# 用编辑器检查并修改服务路径、PATH 和代理后执行：
-systemctl --user daemon-reload
-systemctl --user enable --now codex-web.service
+## 配置字段
+
+默认读取项目根目录的 `config.yaml`。变更后需要重启 Web 后端；页面中的“重载 Codex”只重启内部 Codex 子进程，不会重新读取这些 Web 配置。
+
+| 字段 | 用途与默认值 | 迁移到其他环境时怎么改 |
+|---|---|---|
+| `host` | 监听地址，默认 `0.0.0.0` | 仅本机/SSH 隧道/本机反向代理使用 `127.0.0.1`；局域网直接访问使用 `0.0.0.0` |
+| `port` | 默认 `5200` | 端口占用时改为自己的端口，访问地址、Origin、防火墙和代理上游同步修改 |
+| `username` / `password` | 必填，网页登录凭据 | 每个人自行设置；不是 ChatGPT 密码，也不是 API Key |
+| `allowed_roots` | 必填，可选项目目录的范围 | 填后端机器上已存在、当前 Linux 用户有权限访问的目录 |
+| `allowed_origins` | 允许的浏览器来源，默认只含本机的两种地址 | 按浏览器地址栏填写 `协议://主机:端口`，不加路径、尾部 `/` 或通配符 |
+| `codex_binary` | 默认 `codex`，从服务 PATH 查找 | 可填 `command -v codex` 的绝对路径；若是依赖 Node 的启动器，PATH 仍须能找到 Node |
+| `sandbox` | 默认 `workspace-write` | 可选 `read-only`、`workspace-write`、`danger-full-access`；完全访问同时关闭操作审批 |
+| `models` | 默认 `[]`，从 CLI 自动获取 | 建议保留空列表，使用自己账号实际可用的模型和思考强度 |
+| `cookie_secure` | 默认 `false` | HTTP 使用 `false`；HTTPS 使用 `true`，否则配置不对应会影响登录 Cookie |
+| `data_dir` | 默认项目下的 `data/` | 可改为自己的绝对路径；保存会话索引、事件和附件，需要当前用户可写 |
+| `editor_ignored_names` | 默认忽略 `.git`、构建/依赖/缓存目录 | 按项目调整；设为 `[]` 可取消名称过滤，文件树仍不跟随软链接 |
+| `auth_file` | 默认 `CODEX_HOME/auth.json`，未设环境变量时是 `~/.codex/auth.json` | 只用于 Web 的账号识别和文件变更检测；改它不会让 CLI 自动切换登录目录 |
+| `auth_accounts_dir` | 默认 `~/.codex-auth-snap/accounts` | 可选账号快照目录，仅显示标签时使用；没有该目录不影响聊天 |
+| `auth_poll_seconds` | 默认 `1` 秒 | 账号文件变更检测周期；通常无需修改 |
+
+`allowed_roots` 限制网页目录选择和文件接口，**不是整个 Codex 进程的文件读取隔离**。最终文件权限还受 Linux 用户和 Codex 沙箱限制。不应让需要不同权限的人共用同一套 Web 后台。
+
+## 不同环境的适配
+
+### 原生 Linux：本机和局域网访问
+
+仅本机浏览器使用时，保留 `host: 127.0.0.1` 和 localhost Origin。
+
+其他电脑访问 Linux 服务器时，假设服务器地址为 `192.168.1.100`，把自己的 `config.yaml` 对应字段改为：
+
+```yaml
+host: 0.0.0.0
+port: 5200
+allowed_origins:
+  - http://192.168.1.100:5200
+  - http://127.0.0.1:5200
+  - http://localhost:5200
 ```
 
-服务状态和日志分别使用 `systemctl --user status codex-web.service`、`journalctl --user -u codex-web.service` 查看。服务文件中的 PATH 必须能找到当前安装的 Codex 和 Node；升级或移动后需同步更新。如需退出登录后仍运行或开机即启动，可由管理员为对应用户启用 systemd linger。
+然后重启后端，浏览器访问 `http://192.168.1.100:5200`。`0.0.0.0` 表示接受各网卡的连接，不是浏览器访问地址。访问 IP 变化时也要更新 Origin。HTTP 传输不加密，直接 HTTP 仅用于可信内网。
 
-本机浏览器访问 **http://127.0.0.1:5200**；其他电脑访问 `http://服务器IP:5200`，并确保网络、监听地址、防火墙和 `allowed_origins` 配置对应。用自己的 `config.yaml` 中的用户名和密码登录。
+若服务器启用了防火墙，只允许需要访问的客户端或内网网段连接 TCP 5200；虚拟机、防火墙、VPN 和路由也需要能到达服务器。把 IP 加进 `allowed_origins` 不会自动放行网络。
 
-运行配置默认取项目根目录下的 `config.yaml`；也可用 `CODEX_WEB_CONFIG` 指定其他配置文件。修改配置后重启服务。不要提交或分享 `config.yaml`、`data/`。
+### Windows + WSL2
 
-### 工作目录
+尚未安装 WSL 时，可在管理员 PowerShell 执行：
 
-`allowed_roots` 必须填写自己的目录，可配置多个绝对路径。页面只列目录；选中目录并点击 **New Session** 后生效。已存在 Session 绑定原来的 cwd，切换目录后必须创建新 Session，避免把项目上下文混在一起。
+```powershell
+wsl --install -d Ubuntu
+```
 
-所有目录选择、新建/恢复会话、导入操作均验证真实路径，禁止 `../` 和指向根目录外的软链接绕过；指向允许范围内的软链接可以使用。
+按 Windows 提示完成安装或重启，再进入 Ubuntu。**后续 Python、Codex、Git、配置和启动命令都在 WSL 的 Linux 终端执行**，Codex 也要在 WSL 内用自己的 Linux 用户安装和登录。优先把源码和项目放在 `~/work`，而不是 Windows 挂载盘；参考 [OpenAI 的 WSL 说明](https://learn.chatgpt.com/docs/windows/wsl)。
 
-**这是目录浏览与 cwd 选择的范围限制，不是 Codex 整个进程的文件读取隔离。** Codex 默认使用 `workspace-write`：可读取 Linux 用户可读文件，并在工作目录内写入；需要额外权限时显示审批。以当前 Linux 用户权限为最终上限。单用户 MVP 不适合作为不同权限用户共用的终端服务。
+- 本机 Windows 浏览器先访问 `http://localhost:5200`；配置中保留该 Origin。微软说明 WSL 服务通常可由 Windows 通过 localhost 访问。
+- 若项目位于 Windows 的 `C:\Users\alice\project`，WSL 中通常对应 `/mnt/c/Users/alice/project`，填写后者；先在 WSL 中确认目录和文件权限。Windows 路径不能直接填到 Linux 配置里。
+- 让另一台电脑访问 WSL 时，还涉及 NAT/镜像网络、Windows 防火墙与端口转发，不能只设置 `host: 0.0.0.0`；依据 [微软 WSL 网络文档](https://learn.microsoft.com/en-us/windows/wsl/networking) 配置，再将浏览器实际访问地址加入 Origin。
+- Windows 原生 Codex 的登录和 PATH 不应被当作 WSL 内已经准备好；从 WSL 终端确认 CLI 可用。
 
-### Model / Reasoning
+若需要本指南的 systemd 后台服务，而发行版尚未启用 systemd，在 WSL 内编辑 `/etc/wsl.conf`，保留原有配置并合入：
 
-默认 `models: []`，后台从 `model/list` 获取当前 CLI 返回的模型和每个模型支持的 effort，前端不硬编码选项。
+```ini
+[boot]
+systemd=true
+```
 
-也可按当前账号实际返回的模型和强度手动维护白名单。配置中的名称不代表服务端必然有访问权限；模型拒绝或额度错误会显示在页面。推荐保留 `models: []`，不复制其他人的模型配置。
+随后在 Windows PowerShell 执行：
 
-### 登录与网络
+```powershell
+wsl --shutdown
+```
 
-- HttpOnly、SameSite=Strict Cookie；登录有效期 12 小时，后端重启需要重新登录，会话仍保留。
-- 登录限速；写操作要求自定义校验头；Origin 必须属于 `allowed_origins`。
-- 修改访问主机名或端口时，同步修改 `allowed_origins`。
-- 按需求默认 HTTP，用户名密码和聊天内容在网络传输时不加密。仅在可信内网使用；需要加密时在前面加 HTTPS 反向代理，并设置 `cookie_secure: true` 和 HTTPS Origin。代理 SSE 时关闭响应缓冲、允许长连接。
-- `sandbox` 默认 `workspace-write`，也可设为 `read-only`。设为 `danger-full-access` 时，后端同时使用 `approvalPolicy: never`，即取消文件系统、网络沙箱和操作审批；只应在完全信任的单用户环境中启用。
-- 无需对外暴露 Codex App Server，它只通过本机 stdio 与后台通信。
+该命令会停止所有 WSL 实例和其中的任务；先保存工作，再重新进入发行版。完成后按后台服务章节操作。systemd 不等于 Windows 会一直维持 WSL 运行；Windows 重启或 WSL 关闭后还需启动发行版。步骤依据 [微软 WSL systemd 文档](https://learn.microsoft.com/en-us/windows/wsl/systemd)，未在本项目中实测。
+
+### Linux 虚拟机与远程服务器
+
+代码、Python、Codex 登录和项目目录都放在虚拟机/服务器上。Windows/macOS 只作为浏览器客户端，网页不会直接编辑浏览器电脑的磁盘。
+
+- 桥接网络：使用虚拟机在局域网中的地址，按局域网配置监听和 Origin。
+- NAT 网络：按虚拟化软件配置端口转发。若宿主机 `6200` 转到虚拟机 `5200`，浏览器用宿主机的 `6200`，Origin 也填这个地址；后端 `port` 仍为 `5200`。
+- 固定 IP、域名或端口改变时，重新核对浏览器地址、Origin、防火墙和转发。
+
+无需直接暴露 Web 端口时，可用 SSH 隧道。此命令在浏览器所在电脑的终端执行，替换服务器登录用户和主机；服务端保持监听 `127.0.0.1:5200`：
+
+```sh
+ssh -N -L 6200:127.0.0.1:5200 alice@YOUR_SERVER
+```
+
+本机浏览器访问 `http://127.0.0.1:6200`，服务端配置加入 `http://127.0.0.1:6200` 的 Origin。这里的 6200 是客户端端口，后端仍监听 5200；隧道终端需要保持运行。
+
+### 用户、安装目录或 Codex 安装方式不同
+
+移植时核对三个互相独立的位置：项目安装目录、实际工作项目目录、该 Linux 用户的 Codex 登录/配置目录。不要照抄其他人的 `/home/用户名` 或 Node 版本路径。
+
+Codex 可能是独立二进制，也可能通过 npm、nvm 等方式安装。用 `command -v codex` 查实际入口；若使用 Node 启动器，再用 `command -v node` 查解释器。交互终端能找到文件，不保证 systemd 的 PATH 也能找到，后台服务需单独配置。
+
+### 自定义配置文件和 Codex Home
+
+把 Web 配置放在代码目录外时，可以在实际后端 Linux 终端执行：
+
+```sh
+CODEX_WEB_CONFIG="$HOME/.config/codex-web/config.yaml" "$HOME/work/codex-web/start.sh"
+```
+
+该文件需要先自行创建并填写；`CODEX_WEB_CONFIG` 用绝对路径最清楚。网页登录凭据、端口、项目范围和数据目录都从这个文件读取。
+
+希望 Web 使用独立的 Codex 配置/登录/原生会话目录时，在同一 Linux 终端先指定目录，再用自己的账号登录和启动：
+
+```sh
+export CODEX_HOME="$HOME/.codex-web"
+mkdir -p "$CODEX_HOME"
+codex login
+codex login status
+"$HOME/work/codex-web/start.sh"
+```
+
+启动的 Codex 子进程继承这个环境变量。仅修改 YAML 的 `auth_file` 不会替代 `CODEX_HOME`；使用后台服务时也要给服务设置同一个 `CODEX_HOME`。如果 CLI 使用系统凭据存储而非 `auth.json`，Web 的账号文件监听和标签识别可能不能反映登录变化；先按实际 CLI 登录方式核对，再使用页面“重载 Codex”。详见 [OpenAI 认证与凭据存储说明](https://learn.chatgpt.com/docs/auth)。
+
+同一 Linux 主机上多个人独立使用，优先每人一个 Linux 用户，各自登录 Codex、使用自己的配置和数据目录，并分配不同端口。仅改网页用户名不会实现会话或项目权限隔离。同一用户启动多个实例时，也必须区分端口和 `data_dir`；需要独立 Codex 配置时进一步区分 `CODEX_HOME`。
+
+## 后台运行与开机启动
+
+以下步骤用于具有可工作的用户级 systemd 的 Linux，或已启用 systemd 的 WSL；不会在项目安装时自动修改你的服务。先完成前台启动验证，再配置后台运行。
+
+### 1. 安装并编辑服务文件
+
+```sh
+mkdir -p "$HOME/.config/systemd/user"
+cp "$HOME/work/codex-web/codex-web.service.example" "$HOME/.config/systemd/user/codex-web.service"
+```
+
+打开复制后的文件，按自己的环境修改 `[Service]`。以下是自定义安装路径的示例，`%h` 表示这个用户的 home：
+
+```ini
+[Service]
+WorkingDirectory=%h/apps/codex-web
+ExecStart=%h/apps/codex-web/start.sh
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin"
+```
+
+- 如果仍安装在 `~/work/codex-web`，模板的工作目录和启动路径无需改。
+- 如果使用 nvm，给 PATH 加入自己实际 Node 的 `bin` 目录，例如 `%h/.nvm/versions/node/实际版本/bin`；替换“实际版本”，不要原样复制。
+- `Environment=` 不会像 shell 一样展开 `$HOME`、`$PATH` 或 `~`；使用 `%h` 或实际绝对路径，不要写 `PATH=$PATH:...`。
+- 需要外置配置或独立 Codex Home 时，加上下面相应行；路径应与前台验证时一致，并事先准备好文件/登录：
+
+```ini
+Environment="CODEX_WEB_CONFIG=%h/.config/codex-web/config.yaml"
+Environment="CODEX_HOME=%h/.codex-web"
+```
+
+使用默认配置和默认 Codex Home 时，无需添加这两行。代理在下一节配置。
+
+### 2. 启动、检查和重启
+
+以下查询在运行后端的 Linux 用户终端执行，用途是确认自己的后台服务和启动日志；按 systemd 语法整理，实际服务启动需部署者验证：
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now codex-web.service
+systemctl --user status --no-pager codex-web.service
+journalctl --user -u codex-web.service -n 80 --no-pager
+```
+
+修改服务文件时先 `daemon-reload`，再重启；只修改 YAML 时也必须重启 Web：
+
+```sh
+systemctl --user restart codex-web.service
+```
+
+不要同时保留前台进程占用同一个端口。服务启用后，会在用户服务管理器启动时运行；需要退出 Linux 登录后继续运行或系统启动即运行时，由有权限的管理员为该用户启用 linger：
+
+```sh
+sudo loginctl enable-linger "$(id -un)"
+```
+
+遇到 `Failed to connect to bus` 时，先确认当前处于该用户的正常 Linux 登录环境、systemd 与用户服务管理器可用。容器或未启用 systemd 的 WSL 不应原样套用用户服务命令；可先以前台方式使用。WSL 的发行版生命周期仍由 Windows 管理。
+
+## 网络代理适配
+
+代理地址按 **运行 Web/Codex 的 Linux 环境** 判断，不按浏览器所在电脑判断。`127.0.0.1` 永远指当前进程所在环境；远程 Linux 中的 localhost 不会自动连接到 Windows 上的代理。
+
+### 前台运行
+
+下例假设代理实际在同一个 Linux 环境的 `127.0.0.1:7890` 提供 HTTP 代理。先替换实际地址和端口，再在后端终端执行：
+
+```sh
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
+export NO_PROXY=localhost,127.0.0.1
+export http_proxy="$HTTP_PROXY"
+export https_proxy="$HTTPS_PROXY"
+export no_proxy="$NO_PROXY"
+"$HOME/work/codex-web/start.sh"
+```
+
+`HTTPS_PROXY` 的值是代理端点，并不因为访问目标是 HTTPS 就一定要写 `https://`。示例用于常见 HTTP 代理；按自己的代理类型和 Codex 运行环境验证。Python 依赖、CLI 下载和 Git 拉取也可能需要网络适配，但不是 Web 启动时自动处理的。
+
+### systemd 后台运行
+
+终端 export 不会自动成为服务环境。按自己的地址把下面内容加入用户服务文件的 `[Service]`，然后 daemon-reload 和 restart：
+
+```ini
+Environment="HTTP_PROXY=http://127.0.0.1:7890"
+Environment="HTTPS_PROXY=http://127.0.0.1:7890"
+Environment="NO_PROXY=localhost,127.0.0.1"
+Environment="http_proxy=http://127.0.0.1:7890"
+Environment="https_proxy=http://127.0.0.1:7890"
+Environment="no_proxy=localhost,127.0.0.1"
+```
+
+不需要代理时，保留模板不添加上述行；不要复制他人的代理端口或带认证信息的代理 URL。
+
+### WSL 连接 Windows 上的代理
+
+WSL NAT 模式下，Windows 上的代理通常需要通过 Windows 主机地址访问，并确认代理允许来自 WSL 的连接。在 WSL 的 Linux 终端查询默认网关：
+
+```sh
+ip route show default
+```
+
+将输出中 `via` 后的地址作为待核对的主机地址，替换代理配置中的 `127.0.0.1`；实际路由/VPN 环境不同仍需验证。镜像网络模式可能允许通过 localhost 连接 Windows 服务，具体以 [微软 WSL 网络文档](https://learn.microsoft.com/en-us/windows/wsl/networking) 和本机设置为准。代理连通与 Windows 浏览器能打开 Web 是两条不同链路。
+
+## HTTPS 反向代理
+
+跨不可信网络访问时，应为浏览器到服务器的连接配置 HTTPS。以下适用于**Nginx 与后端在同一台 Linux 机器**，域名 `codex.example.com` 和证书路径均须替换；这是配置示例，未在本项目中部署验证。
+
+后端 `config.yaml` 对应字段：
+
+```yaml
+host: 127.0.0.1
+port: 5200
+allowed_origins:
+  - https://codex.example.com
+cookie_secure: true
+```
+
+在现有 Nginx 配置的 `http` 内增加一个 server；事先准备有效证书和域名解析：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name codex.example.com;
+    ssl_certificate /etc/nginx/certs/codex.example.com.crt;
+    ssl_certificate_key /etc/nginx/certs/codex.example.com.key;
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:5200;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+Web 使用 SSE 长连接传送输出，关闭响应缓冲可避免内容积攒到最后才显示；相关指令见 [Nginx 官方代理模块文档](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)。前端请求使用 `/api`、`/static` 等根路径，当前应部署在域名根路径；不是只改 proxy_pass 就能挂在 `/codex/` 子路径下。
+
+反向代理入口仍需保护访问范围和凭据，不能把这个单用户后台当成多用户公共服务。若代理与后端分处不同机器，不能直接复制 localhost 上游，应按实际网络、监听地址和访问限制重新配置。
+
+## 部署后的分步检查
+
+以下查询在运行后端的 Linux 终端执行，适用于 Linux + Python 3.10+。用于区分依赖、目录、服务和网络问题；语法及配置逻辑已检查，不代表所有目标环境或网络链路已实测。默认安装位置/端口不同的，替换对应值。
+
+### 1. 检查运行依赖
+
+```sh
+cd "$HOME/work/codex-web"
+.venv/bin/python --version
+.venv/bin/python -m pip check
+command -v git
+command -v codex
+codex --version
+codex login status
+```
+
+Python 必须满足版本要求，CLI 必须由启动服务的用户登录。日志中找不到 `codex` 或 `node`，优先核对服务 PATH。
+
+### 2. 检查自己的配置和项目目录
+
+此命令读取配置并验证项目目录，**不输出用户名、密码、令牌或配置全文**。在后端机器的项目目录执行；使用外置配置时先设置自己的 `CODEX_WEB_CONFIG`：
+
+```sh
+cd "$HOME/work/codex-web"
+.venv/bin/python - <<'PYTHON'
+from backend.config import load_config
+from backend.workspace import Workspaces
+config = load_config()
+workspaces = Workspaces(config['allowed_roots'])
+print('配置可读取，网页登录凭据已设置，项目根目录存在')
+print('项目根目录数量：', len(workspaces.roots))
+PYTHON
+```
+
+这里通过只代表凭据非空与目录存在，不证明密码强度、文件写权限或模型权限。出现“目录不存在”时，先修改后端机器上的 Linux 路径，或创建自己的工作目录。
+
+### 3. 检查端口与 HTTP 页面
+
+```sh
+ss -ltn 'sport = :5200'
+curl --noproxy '*' -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5200/
+```
+
+监听在 `127.0.0.1` 时只接收本机连接；监听在 `0.0.0.0` 时也接受网卡连接。页面查询预期返回 HTTP 200，但不代表已经登录或 Codex 可用，需要继续在浏览器中登录并新建会话。
+
+### 4. 检查后台服务和错误日志
+
+```sh
+systemctl --user status --no-pager codex-web.service
+journalctl --user -u codex-web.service -n 80 --no-pager
+```
+
+| 现象 | 优先检查 |
+|---|---|
+| `config.yaml 必须设置用户名和非空密码` | 配置尚未填写，或 CODEX_WEB_CONFIG 指向其他文件 |
+| `No such file` / `CHDIR` / `EXEC` | 服务工作目录、启动文件和 .venv 路径是否存在 |
+| `Address already in use` | 是否已有前台/后台实例占用端口；不要重复启动 |
+| 页面显示“不允许的请求来源” | allowed_origins 是否与浏览器协议、主机、端口完全一致 |
+| 本机能打开，其他电脑打不开 | host、服务器 IP、系统/虚拟机防火墙、路由或转发 |
+| 登录成功但没有模型或聊天失败 | 同一 Linux 用户的 Codex 登录、CLI 版本、账号权限、额度和代理 |
+| 前台正常，后台无输出 | systemd 的 PATH、Codex Home、代理及服务日志 |
+| 回答积攒到最后才出现 | HTTPS/其他代理是否缓冲 SSE 或过早断开长连接 |
+| 账号标签为空 | 可选快照不存在或登录采用凭据存储；不应据此判断聊天不可用 |
+
+## 更新、备份与迁移
+
+更新前在项目目录查看自己的源码修改：
+
+```sh
+cd "$HOME/work/codex-web"
+git status --short
+git pull --ff-only
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+有本地源码修改或分支分叉时先处理自己的改动，不要强制覆盖。`config.yaml` 和数据目录不受 Git 跟踪；更新代码也不会替你更新安装到 `~/.config/systemd/user` 的服务文件。配置字段或服务模板改变时需自行核对。更新完成后重启 Web，浏览器强制刷新。
+
+备份/迁移前先停止自己的 Web 服务及相关执行任务，避免活动 SQLite 数据库和附件在复制期间变化。保存以下内容到自己的受保护位置：Web 配置、实际 `data_dir`（含附件）和自己实际使用的 Codex Home/登录环境。只备份 Web 数据库不能恢复完整模型上下文；不要把备份、auth.json 或凭据上传到源码仓库。
+
+换机器、用户或项目路径后，已有会话仍绑定旧 cwd；当前项目不自动迁移这些路径，应保持相同路径结构，或在新路径创建新会话。Python 虚拟环境在目标机器上重新创建，服务的路径、PATH、代理、监听地址和 Origin 也重新核对。复制来的文件需归新用户所有，真实登录方式在目标环境自行验证。
 
 ## 使用流程
 
