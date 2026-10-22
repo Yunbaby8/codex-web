@@ -2,7 +2,7 @@
 import os
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from fastapi import HTTPException
 from .editor_files import MAX_EDITOR_BYTES
@@ -13,10 +13,12 @@ class GitView:
         self.files = editor_files
 
     def run(self, cwd, *args, check=True):
+        unc = PureWindowsPath(str(cwd)).as_posix().split('/')
+        wsl = os.name == 'nt' and len(unc) >= 4 and unc[:2] == ['', ''] and unc[2].lower() in ('wsl.localhost', 'wsl$')
         env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
         env.update(GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0', GIT_NO_LAZY_FETCH='1', LC_ALL='C')
         command = ['git', '--no-optional-locks', '--literal-pathspecs', '-c', 'core.fsmonitor=false',
-                   '-c', 'core.untrackedCache=false', '-c', 'core.hooksPath=/dev/null', *args]
+                   '-c', 'core.untrackedCache=false', '-c', 'core.hooksPath=' + ('/dev/null' if wsl else os.devnull), *args]
         if args and args[0] == 'status':
             # Status may hash dirty worktree files. Disable configured clean/process
             # filters so a read-only UI does not launch repository filter commands.
@@ -27,9 +29,15 @@ class GitView:
             for name in names:
                 overrides += ['-c', name + '.clean=', '-c', name + '.process=', '-c', name + '.required=false']
             command[1:1] = overrides
+        if wsl:
+            env['WSL_UTF8'] = '1'
+            command = ['wsl.exe', '-d', unc[3], '--cd', '/' + '/'.join(unc[4:]), '--exec',
+                       'env', 'GIT_OPTIONAL_LOCKS=0', 'GIT_TERMINAL_PROMPT=0',
+                       'GIT_NO_LAZY_FETCH=1', 'LC_ALL=C', *command]
         try:
             with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-                result = subprocess.run(command, cwd=cwd, env=env, stdout=out, stderr=err, timeout=15)
+                result = subprocess.run(command, cwd=None if wsl else cwd, env=env, stdout=out, stderr=err,
+                                        timeout=15, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
                 if out.tell() > 4 * 1024 * 1024:
                     raise HTTPException(413, 'Git 输出过大，请选择更小的工作区')
                 out.seek(0); data = out.read()
@@ -49,7 +57,11 @@ class GitView:
             if any((p / '.git').exists() for p in [root, *root.parents]):
                 raise HTTPException(409, '无法读取 Git 仓库，请检查仓库权限及所有权配置')
             return root, None
-        repo = self.files.workspaces.resolve(os.fsdecode(data.rstrip(b'\n')))
+        repo_path = os.fsdecode(data.rstrip(b'\n'))
+        unc = PureWindowsPath(str(root)).as_posix().split('/')
+        if os.name == 'nt' and repo_path.startswith('/') and len(unc) >= 4 and unc[:2] == ['', ''] and unc[2].lower() in ('wsl.localhost', 'wsl$'):
+            repo_path = '//' + unc[2] + '/' + unc[3] + repo_path
+        repo = self.files.workspaces.resolve(repo_path)
         if root != repo and repo not in root.parents:
             raise HTTPException(403, 'Git 仓库与工作区不匹配')
         return root, repo
@@ -60,7 +72,7 @@ class GitView:
         if path.startswith('/') or any(p in ('', '.', '..', '.git') for p in parts):
             raise HTTPException(403, '文件不在当前工作区内')
         try:
-            return str((repo / path).relative_to(root))
+            return (repo / path).relative_to(root).as_posix()
         except ValueError as exc:
             raise HTTPException(403, '文件不在当前工作区内') from exc
 
@@ -104,7 +116,7 @@ class GitView:
                     entries=self.changes(root, repo))
 
     def blob(self, root, repo, path, revision):
-        repo_path = str((root / path).relative_to(repo))
+        repo_path = (root / path).relative_to(repo).as_posix()
         if revision == 'HEAD':
             code, _ = self.run(repo, 'rev-parse', '--verify', 'HEAD', check=False)
             if code:

@@ -37,12 +37,16 @@ export function createComposer({getCurrent, getWorkspace, getConfig, isBusy, isS
     $('message').dispatchEvent(new Event('input'));$('message').focus();$('message').setSelectionRange(next.length,next.length);
   });
   function updateControls() {
+    $('permissionMode').disabled=isBusy()||submitting||isSelecting();
     $('stop').disabled=!isBusy();$('stop').hidden=!isBusy();$('send').hidden=false;$('send').disabled=submitting||isSelecting();
     $('status').textContent=isBusy()?'Codex 正在工作，可继续引导…':'就绪';
     $('message').placeholder=isBusy()?'补充指令，引导当前正在执行的任务…':'让 Codex 帮你分析项目、修改代码或执行任务…';
     $('send').title=isBusy()?'引导当前任务（Enter），Shift + Enter 换行':'发送（Enter），Shift + Enter 换行';
     $('send').setAttribute('aria-label',isBusy()?'引导当前任务':'发送');$('composer').classList.toggle('steering',isBusy());updateFastControl();
   }
+  $('permissionMode').onchange=()=>{
+    $('permission').title=({'read-only':'可读取和分析文件；额外操作可能需要批准','workspace-write':'可修改当前工作区；额外访问可能需要批准','danger-full-access':'可访问工作区外文件并执行命令，无需逐项批准'})[$('permissionMode').value]+'。下一轮生效，不改变网页编辑器的保存权限。';
+  };
   function fastTier(){
     const model=getConfig()?.models.find(m=>m.id===$('model').value);
     return model?.service_tiers?.find(t=>t.name?.toLowerCase()==='fast'||['fast','priority'].includes(t.id))||null;
@@ -68,17 +72,17 @@ export function createComposer({getCurrent, getWorkspace, getConfig, isBusy, isS
     if(!message)throw Error('没有可再次运行的文字消息');
     if(userItems.some(item=>(item.content||[]).some(content=>content.type==='localImage')))throw Error('这轮包含附件，请从输入框重新发送');
     if(!window.confirm('再次运行会创建新一轮任务，也可能再次修改文件。确定继续吗？'))return;
-    submitting=true;button.disabled=true;
-    try{await api(`/sessions/${getCurrent().id}/messages`,'POST',{message,attachments:[],model:$('model').value,effort:$('effort').value,service_tier:selectedServiceTier()});}
-    finally{submitting=false;if(!isBusy())button.disabled=false;}
+    submitting=true;button.disabled=true;updateControls();
+    try{const sid=getCurrent().id;const result=await api(`/sessions/${sid}/messages`,'POST',{message,attachments:[],model:$('model').value,effort:$('effort').value,service_tier:selectedServiceTier(),sandbox:$('permissionMode').value});await onSent(sid,result,false);}
+    finally{submitting=false;updateControls();if(!isBusy())button.disabled=false;}
   }
   $('composer').onsubmit=guarded(async e=>{
     e.preventDefault();if(submitting)return;
     if(isSelecting())throw Error('正在打开会话，请稍后发送');
     const sentText=$('message').value,message=sentText.trim(),sentRevision=draftRevision;if(!message&&!draftFiles.length)return;
-    const steering=isBusy();
+    const steering=isBusy(),sandbox=$('permissionMode').value;
     conversation.follow();
-    submitting=true;$('send').disabled=true;
+    submitting=true;$('send').disabled=true;$('permissionMode').disabled=true;
     try{
       if(!getCurrent()){if(steering)throw Error('当前没有可引导的任务');await newSession(true);}
       if(!steering&&getCurrent().cwd!==getWorkspace())throw Error('工作目录已改变，请先点击 New Session');
@@ -92,14 +96,15 @@ export function createComposer({getCurrent, getWorkspace, getConfig, isBusy, isS
         }
         uploaded.push(draft.uploaded);
       }
-      const result=steering?await api(`/sessions/${sid}/steer`,'POST',{message,attachments:uploaded}):await api(`/sessions/${sid}/messages`,'POST',{message,attachments:uploaded,model:$('model').value,effort:$('effort').value,service_tier:selectedServiceTier()});
+      const result=steering?await api(`/sessions/${sid}/steer`,'POST',{message,attachments:uploaded}):await api(`/sessions/${sid}/messages`,'POST',{message,attachments:uploaded,model:$('model').value,effort:$('effort').value,service_tier:selectedServiceTier(),sandbox});
+      $('permissionMode').value=sandbox;
       for(const draft of draftFiles)if(draft.preview)URL.revokeObjectURL(draft.preview);
       draftFiles=[];renderDraftFiles();
       if(draftRevision===sentRevision&&$('message').value===sentText)$('message').value='';
       saveDraft();resizeComposer();
       await onSent(sid,result,uploaded.length>0);
       if(steering)$('status').textContent='引导已发送，Codex 正在调整…';
-    }finally{submitting=false;$('send').disabled=false;}
+    }finally{submitting=false;updateControls();}
   });
   $('message').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('composer').requestSubmit();}};
   $('stop').onclick=guarded(async()=>{if(getCurrent())await api(`/sessions/${getCurrent().id}/stop`,'POST',{});});

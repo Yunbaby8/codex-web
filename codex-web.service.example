@@ -5,7 +5,7 @@ Description=Codex Web
 Type=simple
 # 默认安装在 ~/work/codex-web；其他位置请修改下面两项。
 WorkingDirectory=%h/work/codex-web
-ExecStart=%h/work/codex-web/start.sh
+ExecStart=/usr/bin/bash %h/work/codex-web/start.sh
 # 按自己的环境补充 Node/Codex 所在目录；systemd 不会读取交互式 shell 的 PATH。
 Environment="PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin"
 # 如果 Codex 需要代理，在这里按自己的环境添加 HTTP_PROXY/HTTPS_PROXY。

@@ -2,8 +2,12 @@
   "name": "codex-web-editor",
   "private": true,
   "scripts": {
-    "build:editor": "esbuild frontend/editor-entry.js node_modules/monaco-editor/esm/vs/editor/editor.worker.js --bundle --format=esm --outdir=frontend/vendor --entry-names=[name] --loader:.ttf=file --minify && cp node_modules/monaco-editor/LICENSE frontend/vendor/MONACO-LICENSE && cp node_modules/monaco-editor/ThirdPartyNotices.txt frontend/vendor/MONACO-ThirdPartyNotices.txt"
+    "build:editor": "node build-editor.mjs"
   },
-  "dependencies": {"monaco-editor": "0.57.0"},
-  "devDependencies": {"esbuild": "0.28.2"}
+  "dependencies": {
+    "monaco-editor": "0.57.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
 }

@@ -42,8 +42,8 @@ export function createSessions({conversation, composer, workbench}) {
   async function boot() {
     config=await api('/config');
     renderSidebarInfo();
-    $('permissionLabel').textContent=({'read-only':'只读','workspace-write':'工作区写入','danger-full-access':'完全访问'})[config.sandbox]||config.sandbox;
-    $('permission').title='后端权限：'+config.sandbox;
+    $('permissionMode').value=config.sandbox;
+    $('permissionMode').onchange();
     $('model').replaceChildren(...config.models.map(m=>new Option(m.id.replace(/^gpt-/, 'GPT-').replace(/-(astra|sol|terra|luna)$/, (_,name)=>' '+name[0].toUpperCase()+name.slice(1)),m.id)));
     composer.fillEfforts('medium');
     composer.updateFastControl();
@@ -84,7 +84,7 @@ export function createSessions({conversation, composer, workbench}) {
     if(!$('directoryDropdown').hidden){closeWorkspaceDropdown();return;}
     $('directoryDropdown').hidden=false;$('workspaceButton').setAttribute('aria-expanded','true');
     $('directories').textContent='正在读取目录…';$('directoryPath').textContent=workspace;
-    $('roots').value=[...config.roots].sort((a,b)=>b.length-a.length).find(root=>workspace===root||workspace.startsWith(root.replace(/\/$/,'')+'/'))||config.roots[0];
+    $('roots').value=[...config.roots].sort((a,b)=>b.length-a.length).find(root=>{const windows=/^[a-z]:[\\/]|^[\\/]{2}/i.test(root);const current=windows?workspace.toLowerCase():workspace;const base=windows?root.toLowerCase():root;return current===base||current.startsWith(base.replace(/\/$/,'')+'/');})||config.roots[0];
     $('roots').focus();await browse(workspace);
   });
   document.addEventListener('click',event=>{
@@ -112,7 +112,7 @@ export function createSessions({conversation, composer, workbench}) {
     conversation.saveReadingView();composer.saveDraft();
     const previousId=current?.id||'new';
     source?.close();source=null;const streamGeneration=++generation;
-    current=s;conversation.setContextUsage(s.tokenUsage);renderSidebarInfo();const belongsToView=sessionView==='archived'?Boolean(s.archived):!s.archived;if(belongsToView)listedSessions.set(id,{...s,web:true});else listedSessions.delete(id);renderSessions();localStorage.setItem('codexWebSession',id);setWorkspace(s.cwd);
+    current=s;$('permissionMode').value=s.sandbox||config.sandbox;$('permissionMode').onchange();conversation.setContextUsage(s.tokenUsage);renderSidebarInfo();const belongsToView=sessionView==='archived'?Boolean(s.archived):!s.archived;if(belongsToView)listedSessions.set(id,{...s,web:true});else listedSessions.delete(id);renderSessions();localStorage.setItem('codexWebSession',id);setWorkspace(s.cwd);
     $('chatTitle').textContent=s.title||s.name||'新对话';
     if(config.models.some(m=>m.id===s.model)){$('model').value=s.model;composer.fillEfforts(s.effort);}
     $('currentSession').textContent='Session: '+id;
@@ -147,7 +147,7 @@ export function createSessions({conversation, composer, workbench}) {
   }
   function clearCurrentSession(message){
     conversation.saveReadingView();composer.saveDraft();
-    generation++;source?.close();source=null;current=null;localStorage.removeItem('codexWebSession');
+    generation++;source?.close();source=null;current=null;$('permissionMode').value=config.sandbox;$('permissionMode').onchange();localStorage.removeItem('codexWebSession');
     conversation.reset();renderSidebarInfo();setBusy(false);
     const empty=document.createElement('div');empty.id='empty';empty.textContent='选择项目目录，创建 Session，开始与 Codex 对话。';$('messages').append(empty);
     $('currentSession').textContent='尚未创建 Session';$('status').textContent=message;
@@ -263,6 +263,7 @@ export function createSessions({conversation, composer, workbench}) {
 
   async function updateAfterSend(sid,result,hasAttachments){
     const listed=listedSessions.get(sid);
+    if(result.sandbox&&current?.id===sid)current.sandbox=result.sandbox;
     if(result.title){if(current?.id===sid){current.title=result.title;$('chatTitle').textContent=result.title;}if(listed)listed.title=result.title;}
     if(listed){
       listed.updated=Date.now()/1000;

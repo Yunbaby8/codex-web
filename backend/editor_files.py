@@ -1,15 +1,20 @@
 """Bounded UTF-8 file access relative to an already validated workspace.
 
-Linux directory descriptors and O_NOFOLLOW prevent symlink traversal, including
-when another process replaces a directory between validation and opening it.
+Platform-specific file handles reject links and verify workspace containment;
+saves preserve bytes and detect stale revisions before writing.
 """
+import threading
 import errno
-import fcntl
+import stat
 import hashlib
 import os
-import stat
 import time
 from contextlib import contextmanager
+
+if os.name == 'nt':
+    from .windows_files import open_workspace_path, is_reparse
+else:
+    import fcntl
 
 from fastapi import HTTPException
 
@@ -20,11 +25,16 @@ DEFAULT_IGNORED = ['.git', 'build', 'tmp', 'node_modules', '__pycache__', '.venv
 class EditorFiles:
     def __init__(self, workspaces, ignored=None):
         self.workspaces = workspaces
+        self.save_lock = threading.Lock()
         self.ignored = set(DEFAULT_IGNORED if ignored is None else ignored)
 
     @contextmanager
     def opened(self, workspace, path, *, directory=False, writable=False):
         root = self.workspaces.resolve(workspace)
+        if os.name == 'nt':
+            with open_workspace_path(root, path, directory=directory, writable=writable) as opened:
+                yield opened
+            return
         if path.startswith('/') or '\x00' in path or any(p in ('..', '.') for p in path.split('/')):
             raise HTTPException(403, '仅允许工作区内的相对路径')
         parts = path.split('/') if path else []
@@ -65,7 +75,7 @@ class EditorFiles:
                 for count, child in enumerate(children):
                     if count >= 10000:
                         raise HTTPException(413, '目录条目超过 10000，请选择更小的工作区或子目录')
-                    if child.name in self.ignored or child.is_symlink():
+                    if child.name in self.ignored or (is_reparse(child.path) if os.name == 'nt' else child.is_symlink()):
                         continue
                     is_dir = child.is_dir(follow_symlinks=False)
                     if is_dir or child.is_file(follow_symlinks=False):
@@ -92,7 +102,7 @@ class EditorFiles:
                             if visited > scan_limit or time.monotonic() >= deadline:
                                 truncated = True
                                 break
-                            if child.name in self.ignored or child.is_symlink():
+                            if child.name in self.ignored or (is_reparse(child.path) if os.name == 'nt' else child.is_symlink()):
                                 continue
                             relative = '/'.join(filter(None, [path, child.name]))
                             if child.is_dir(follow_symlinks=False):
@@ -118,7 +128,8 @@ class EditorFiles:
         before = os.fstat(fd)
         if before.st_size > MAX_EDITOR_BYTES:
             raise HTTPException(413, '文件超过 2 MiB，无法在编辑器中打开')
-        raw = os.pread(fd, MAX_EDITOR_BYTES + 1, 0)
+        os.lseek(fd, 0, os.SEEK_SET)
+        raw = os.read(fd, MAX_EDITOR_BYTES + 1)
         after = os.fstat(fd)
         if (before.st_mtime_ns, before.st_ctime_ns, before.st_size) != (after.st_mtime_ns, after.st_ctime_ns, after.st_size):
             raise HTTPException(409, '文件正在被其他程序修改，请重试')
@@ -143,16 +154,17 @@ class EditorFiles:
             raise HTTPException(413, '保存内容超过 2 MiB')
         if any(ord(c) < 32 and c not in '\t\r\n\f' for c in content):
             raise HTTPException(415, '不能保存二进制内容')
-        with self.opened(workspace, path, writable=True) as fd:
-            # Serializes this server's saves. External editors need not obey flock;
-            # revision checking detects changes already present before this write.
-            fcntl.flock(fd, fcntl.LOCK_EX)
+        with self.save_lock, self.opened(workspace, path, writable=True) as fd:
+            # Windows excludes external writers; Linux keeps its advisory file lock.
+            if os.name != 'nt':
+                fcntl.flock(fd, fcntl.LOCK_EX)
             current = self.snapshot(fd)
             if current['revision'] != revision:
                 raise HTTPException(409, '磁盘文件已被其他程序修改，未覆盖。请先复制当前编辑内容，再重新加载文件。')
+            os.lseek(fd, 0, os.SEEK_SET)
             offset = 0
             while offset < len(raw):
-                offset += os.pwrite(fd, raw[offset:], offset)
+                offset += os.write(fd, raw[offset:])
             os.ftruncate(fd, len(raw))
             os.fsync(fd)
             saved = self.snapshot(fd)

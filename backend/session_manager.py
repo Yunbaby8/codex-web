@@ -26,7 +26,9 @@ class SessionStore:
         if 'title_set' not in columns:
             self.db.execute('ALTER TABLE sessions ADD COLUMN title_set INTEGER NOT NULL DEFAULT 0')
             self.db.execute("UPDATE sessions SET title_set=1 WHERE title NOT IN ('New Session','Imported Session','')")
-        if not {'archived', 'created', 'title_set'} <= columns:
+        if 'sandbox' not in columns:
+            self.db.execute('ALTER TABLE sessions ADD COLUMN sandbox TEXT')
+        if not {'archived', 'created', 'title_set', 'sandbox'} <= columns:
             self.db.commit()
 
     def save(self, sid, cwd, model, effort, title='New Session'):
@@ -41,6 +43,11 @@ class SessionStore:
                 title, title_set = existing['title'], 1
             self.db.execute('UPDATE sessions SET cwd=?,model=?,effort=?,title=?,updated=?,created=?,archived=0,title_set=? WHERE id=?', (cwd,model,effort,title,now,created,title_set,sid))
         self.db.commit()
+
+    def set_sandbox(self, sid, sandbox):
+        self.get(sid)
+        with self.db:
+            self.db.execute('UPDATE sessions SET sandbox=? WHERE id=?', (sandbox, sid))
 
     def rename(self, sid, title):
         self.get(sid)

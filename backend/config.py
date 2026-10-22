@@ -7,12 +7,12 @@ BASE = Path(__file__).resolve().parent.parent
 
 def load_config():
     path = Path(os.environ.get('CODEX_WEB_CONFIG', BASE / 'config.yaml'))
-    data = yaml.safe_load(path.read_text())
+    data = yaml.safe_load(path.read_text(encoding='utf-8-sig'))
     if not data.get('username') or not data.get('password'):
         raise RuntimeError('config.yaml 必须设置用户名和非空密码')
-    data.setdefault('host', '0.0.0.0')
+    data.setdefault('host', '127.0.0.1')
     data.setdefault('port', 5200)
-    data.setdefault('codex_binary', 'codex')
+    data.setdefault('codex_binary', 'codex.exe' if os.name == 'nt' else 'codex')
     data.setdefault('auth_file', str(Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'auth.json'))
     data.setdefault('auth_poll_seconds', 1)
     data.setdefault('sandbox', 'workspace-write')

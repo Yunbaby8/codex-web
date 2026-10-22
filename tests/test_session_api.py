@@ -200,7 +200,7 @@ class SessionApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(created.json()['id'], 'created')
             base = '/api/sessions/created'
             sent = await client.post(base+'/messages', json=dict(message='first', model='test', effort='medium'))
-            self.assertEqual(sent.json(), {'ok':True,'title':'first'})
+            self.assertEqual(sent.json(), {'ok':True,'title':'first','sandbox':'workspace-write'})
             history = await client.get(base)
             self.assertTrue(history.json()['active'])
             self.assertEqual(history.json()['history']['id'], 'created')

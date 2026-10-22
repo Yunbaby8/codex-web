@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from windows_fixture import junction
 from pathlib import Path
 from backend.workspace import Workspaces
 from backend.session_manager import SessionStore
@@ -14,13 +15,13 @@ class WorkspaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)/'root';root.mkdir();(root/'project').mkdir()
             outside=Path(temp)/'outside';outside.mkdir()
-            (root/'escape').symlink_to(outside,target_is_directory=True)
-            (root/'inside').symlink_to(root/'project',target_is_directory=True)
+            junction(root/'escape', outside)
+            junction(root/'inside', root/'project')
             (root/'file.txt').write_text('test')
             w=Workspaces([str(root)])
             for path in (root/'../outside',root/'escape',outside,root/'file.txt'):
                 with self.assertRaises(ValueError):w.resolve(str(path))
-            self.assertEqual(w.resolve(str(root/'inside')),root/'project')
+            self.assertEqual(w.resolve(str(root/'inside')),(root/'project').resolve())
             self.assertEqual({d['name'] for d in w.browse(str(root))['directories']},{'inside','project'})
             self.assertIsNone(w.browse(str(root))['parent'])
 
@@ -28,11 +29,11 @@ class WorkspaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)/'root';root.mkdir();inside=root/'file.txt';inside.write_text('ok')
             outside=Path(temp)/'outside.txt';outside.write_text('no')
-            (root/'escape.txt').symlink_to(outside)
+            junction(root/'escape', Path(temp))
             w=Workspaces([str(root)])
-            self.assertEqual(w.resolve_file(str(inside)),inside)
+            self.assertEqual(w.resolve_file(str(inside)),inside.resolve())
             with self.assertRaises(ValueError):w.resolve_file(str(outside))
-            with self.assertRaises(ValueError):w.resolve_file(str(root/'escape.txt'))
+            with self.assertRaises(ValueError):w.resolve_file(str(root/'escape'/'outside.txt'))
             with self.assertRaises(ValueError):w.resolve_file(str(root))
 
 class StoreTests(unittest.TestCase):
@@ -99,7 +100,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_async_question_survives_completion_reload_and_answer(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as temp:
-            store=SessionStore(Path(temp)/'db');self.addCleanup(store.db.close)
+            store=SessionStore(Path(temp)/'db')
             store.save('a',temp,'m','medium')
             manager=CodexManager({'sandbox':'workspace-write'},store,
                 attachments=Mock(for_session=Mock(return_value=[])),workspaces=Workspaces([temp]))
@@ -125,10 +126,12 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await manager.get_session('a'))['requests'],[])
             self.assertIn('async:question',store.resolved_requests('a'))
 
+            store.db.close()
+
     async def test_async_question_steers_running_turn_and_preserves_failed_reply(self):
         from unittest.mock import AsyncMock
         with tempfile.TemporaryDirectory() as temp:
-            store=SessionStore(Path(temp)/'db');self.addCleanup(store.db.close)
+            store=SessionStore(Path(temp)/'db')
             store.save('a',temp,'m','medium')
             manager=CodexManager({'sandbox':'workspace-write'},store)
             req=manager.async_question('a',{'id':'q','type':'agentMessage','questions':[{'title':'选哪个？','options':['甲','乙']}]})
@@ -144,9 +147,11 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(args[1]['expectedTurnId'],'running')
             self.assertIn('选哪个？\n乙',args[1]['input'][0]['text'])
 
+            store.db.close()
+
     async def test_user_question_is_forwarded_and_answered(self):
         with tempfile.TemporaryDirectory() as temp:
-            store=SessionStore(Path(temp)/'db');self.addCleanup(store.db.close)
+            store=SessionStore(Path(temp)/'db')
             store.save('a','/tmp','m','medium')
             manager=CodexManager({'sandbox':'danger-full-access'},store)
             manager.loaded.add('a')
@@ -169,6 +174,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                 'layout':{'answers':['弹窗']},'note':{'answers':['保持简洁']}}}}])
             self.assertEqual(manager.requests,{})
             self.assertEqual(store.events('a')[-1]['method'],'web/requestResolved')
+
+            store.db.close()
 
     def test_auth_label_matches_auth_snapshot_filename(self):
         with tempfile.TemporaryDirectory() as temp:

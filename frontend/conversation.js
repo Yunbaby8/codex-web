@@ -117,22 +117,25 @@ export function createConversation({getCurrent, getWorkspace, getRoots, setWorks
   }
   setInterval(()=>{for(const entry of turns.values())if(entry.running)renderTurnDuration(entry);},1000);
   function workspaceFileReference(target,root=getCurrent()?.cwd||getWorkspace()){
-    if(!root||!target||/^[a-z][a-z0-9+.-]*:/i.test(target)&&!/^.*:\d+(?::\d+)?$/.test(target))return null;
+    if(!root||!target)return null;
+    const windows=/^[a-z]:[\\/]|^[\\/]{2}/i.test(root);
+    if(windows){target=target.replace(/\\/g,'/');root=root.replace(/\\/g,'/');}
+    if(/^[a-z][a-z0-9+.-]*:/i.test(target)&&! /^[a-z]:\//i.test(target))return null;
     let path=target,line=null,column=1;
     const location=path.match(/^(.*?)(?::(\d+)(?::(\d+))?|#L(\d+)(?:C(\d+))?)$/);
     if(location){path=location[1];line=Number(location[2]||location[4]);column=Number(location[3]||location[5]||1);}
     root=root.replace(/\/$/,'')||'/';
-    if(path.startsWith('/')){const prefix=root==='/'?'/':root+'/';if(!path.startsWith(prefix))return null;path=path.slice(prefix.length);}
+    if(path.startsWith('/')||/^[a-z]:\//i.test(path)){const prefix=root==='/'?'/':root+'/';if(!(windows?path.toLowerCase().startsWith(prefix.toLowerCase()):path.startsWith(prefix)))return null;path=path.slice(prefix.length);}
     else path=path.replace(/^\.\//,'');
     if(!path||path.includes('\0')||path.includes('\\')||path.split('/').some(part=>!part||part==='..'||part==='.')||path.includes('://'))return null;
-    return {workspace:root,path,line,column};
+    return {workspace:/^[a-z]:$/i.test(root)?root+'/':root,path,line,column};
   }
   function localFileHref(target){
     const reference=workspaceFileReference(target);
-    if(reference)return '/api/files?path='+encodeURIComponent((reference.workspace==='/'?'':reference.workspace)+'/'+reference.path)+(reference.line?'#L'+reference.line:'');
-    let path=target,line='';const location=target.match(/^(.*):(\d+)(?::\d+)?$/);
+    if(reference)return '/api/files?path='+encodeURIComponent(reference.workspace.replace(/\/$/,'')+'/'+reference.path)+(reference.line?'#L'+reference.line:'');
+    let path=target.replace(/\\/g,'/'),line='';const location=path.match(/^(.*):(\d+)(?::\d+)?$/);
     if(location){path=location[1];line='#L'+location[2];}
-    if(!getRoots()?.some(root=>path===root||path.startsWith(root+'/')))return null;
+    if(!getRoots()?.some(root=>{const windows=/^[a-z]:[\\/]|^[\\/]{2}/i.test(root);const base=(windows?root.replace(/\\/g,'/').toLowerCase():root).replace(/\/$/,'');const candidate=windows?path.toLowerCase():path;return candidate===base||candidate.startsWith(base+'/');}))return null;
     return '/api/files?path='+encodeURIComponent(path)+line;
   }
   function markEditorLink(link,target){
@@ -179,7 +182,7 @@ export function createConversation({getCurrent, getWorkspace, getRoots, setWorks
       else{
         const markdown=token.match(/^\[([^\]]+)\]\((.+)\)$/),raw=(markdown?markdown[2]:token).replace(/^<|>$/g,''),trailing=markdown?'':(raw.match(/[),.;!?，。；：！？]+$/)?.[0]||''),target=trailing?raw.slice(0,-trailing.length):raw,href=/^https?:\/\//.test(target)?target:localFileHref(target);
         if(href){const link=document.createElement('a');link.textContent=markdown?markdown[1]:target;link.href=href;markEditorLink(link,target);link.target='_blank';link.rel='noopener noreferrer';container.append(link);if(trailing)container.append(document.createTextNode(trailing));}
-        else if(markdown&&target.startsWith('/')){const unavailable=document.createElement('span');unavailable.className='local-link-unavailable';unavailable.textContent=markdown[1];unavailable.title='文件不在允许访问的目录内，无法从网页打开';unavailable.setAttribute('role','link');unavailable.setAttribute('aria-disabled','true');container.append(unavailable);}
+        else if(markdown&&(/^[a-z]:[\\/]/i.test(target)||target.startsWith('/'))){const unavailable=document.createElement('span');unavailable.className='local-link-unavailable';unavailable.textContent=markdown[1];unavailable.title='文件不在允许访问的目录内，无法从网页打开';unavailable.setAttribute('role','link');unavailable.setAttribute('aria-disabled','true');container.append(unavailable);}
         else container.append(document.createTextNode(token));
       }
       cursor=match.index+token.length;
@@ -388,8 +391,8 @@ export function createConversation({getCurrent, getWorkspace, getRoots, setWorks
     for(const [index,change] of changes.entries()){
       const row=document.createElement('div'),path=document.createElement('span'),stats=document.createElement('span');
       row.className='changed-file';if(index>=3)row.hidden=true;
-      const absolute=String(change.path||''),label=getCurrent()?.cwd&&absolute.startsWith(getCurrent().cwd+'/')?absolute.slice(getCurrent().cwd.length+1):absolute,href=localFileHref(absolute);
-      if(href){const link=document.createElement('button');link.type='button';link.className='file-link';link.textContent=label;link.onclick=guarded(async()=>{if(getCurrent()?.cwd&&absolute.startsWith(getCurrent().cwd+'/')){if(getWorkspace()!==getCurrent().cwd)setWorkspace(getCurrent().cwd);await openFile(absolute.slice(getCurrent().cwd.length+1));}else window.open(href,'_blank','noopener,noreferrer');});link.onmouseenter=e=>updateFilePathTooltip(e,absolute);link.onmousemove=e=>updateFilePathTooltip(e,absolute);link.onmouseleave=()=>updateFilePathTooltip();path.append(link);}else path.textContent=label;
+      const absolute=String(change.path||'').replace(/\\/g,'/'),label=getCurrent()?.cwd&&absolute.toLowerCase().startsWith(getCurrent().cwd.replace(/\/$/,'').toLowerCase()+'/')?absolute.slice(getCurrent().cwd.length+1):absolute,href=localFileHref(absolute);
+      if(href){const link=document.createElement('button');link.type='button';link.className='file-link';link.textContent=label;link.onclick=guarded(async()=>{if(getCurrent()?.cwd&&absolute.toLowerCase().startsWith(getCurrent().cwd.replace(/\/$/,'').toLowerCase()+'/')){if(getWorkspace()!==getCurrent().cwd)setWorkspace(getCurrent().cwd);await openFile(absolute.slice(getCurrent().cwd.length+1));}else window.open(href,'_blank','noopener,noreferrer');});link.onmouseenter=e=>updateFilePathTooltip(e,absolute);link.onmousemove=e=>updateFilePathTooltip(e,absolute);link.onmouseleave=()=>updateFilePathTooltip();path.append(link);}else path.textContent=label;
       let added=0,removed=0;
       for(const line of String(change.diff||'').split('\n')){if(line.startsWith('+')&&!line.startsWith('+++'))added++;else if(line.startsWith('-')&&!line.startsWith('---'))removed++;}
       stats.className='change-stats';stats.innerHTML='<span class="added">+'+added+'</span> <span class="removed">-'+removed+'</span>';

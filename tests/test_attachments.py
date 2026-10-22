@@ -12,6 +12,15 @@ async def chunks(data):
     yield data
 
 class AttachmentTests(unittest.IsolatedAsyncioTestCase):
+    async def test_windows_suffix_cannot_create_alternate_stream(self):
+        with tempfile.TemporaryDirectory() as temp:
+            attachments = Attachments(Path(temp))
+            uploaded = await attachments.upload('a', '报告.txt:stream', chunks(b'ordinary file'))
+            metadata, actual = attachments.get('a', uploaded['id'])
+            self.assertNotIn(':', actual.name)
+            self.assertEqual(actual.read_bytes(), b'ordinary file')
+            self.assertEqual(metadata['name'], '报告.txt:stream')
+
     async def test_session_containment_and_native_inputs(self):
         with tempfile.TemporaryDirectory() as temp:
             a=Attachments(Path(temp))

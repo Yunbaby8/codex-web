@@ -153,11 +153,17 @@ export function createEditor(workbench) {
     el('editorEncoding').textContent=active?'UTF-8 · '+(active.model.getEOL()==='\r\n'?'CRLF':'LF'):'';
     el('editorLanguage').textContent=active?.model.getLanguageId()||'';
   }
-  function render() {
-    el('editorTabs').replaceChildren();
+  function render(rebuildTabs=true) {
+    if(rebuildTabs)el('editorTabs').replaceChildren();
     for(const [key,file] of files) {
       if(file.workspace!==workspace)continue;
+      if(!rebuildTabs){
+        const label=(dirty(file)?'● ':'')+file.path.split('/').pop();
+        if(file.tabButton&&file.tabButton.textContent!==label){file.tabButton.textContent=label;file.tabButton.setAttribute('aria-label',label);}
+        continue;
+      }
       const tab=document.createElement('div'),button=document.createElement('button'),close=document.createElement('button');
+      file.tabButton=button;
       tab.className='editor-tab';tab.classList.toggle('active',!diffVisible&&file===active);
       button.type='button';button.setAttribute('role','tab');button.setAttribute('aria-selected',String(!diffVisible&&file===active));
       button.textContent=(dirty(file)?'● ':'')+file.path.split('/').pop();button.title=file.path;button.setAttribute('aria-label',button.textContent);button.onclick=()=>activate(file);
@@ -182,7 +188,8 @@ export function createEditor(workbench) {
   function closeFile(key) {
     const file=files.get(key);if(!file||file.saving)return;
     if(dirty(file)&&!confirm('放弃 '+file.path+' 的未保存修改并关闭？'))return;
-    if(active===file)activate(null);
+    const visible=[...files.values()].filter(f=>f.workspace===workspace),index=visible.indexOf(file);
+    if(active===file)activate(visible[index+1]||visible[index-1]||null);
     file.listener.dispose();file.model.dispose();files.delete(key);
     if(!active)activate([...files.values()].find(f=>f.workspace===workspace)||null);else render();
   }
@@ -197,7 +204,7 @@ export function createEditor(workbench) {
         const model=monaco.editor.createModel(data.content,language(path),uri);
         model.updateOptions({tabSize:4,insertSpaces:language(path)!=='makefile'});
         const file={workspace:root,path,model,revision:data.revision,savedText:model.getValue(undefined,true),saving:false};
-        file.listener=model.onDidChangeContent(()=>{if(file.workspace===workspace)render();});
+        file.listener=model.onDidChangeContent(()=>{if(file.workspace===workspace)render(false);});
         files.set(key,file);return file;
       })().finally(()=>opening.delete(key)));
       await opening.get(key);

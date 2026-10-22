@@ -24,11 +24,11 @@ class Workspaces:
         for child in path.iterdir():
             try:
                 target = self.resolve(str(child))
-                children.append({'name': child.name, 'path': str(target)})
+                children.append({'name': child.name, 'path': target.as_posix()})
             except (ValueError, OSError, RuntimeError):
                 continue
         try:
-            parent = str(self.resolve(str(path.parent)))
+            parent = self.resolve(str(path.parent)).as_posix()
         except (ValueError, OSError):
             parent = None
-        return {'path': str(path), 'parent': parent, 'directories': sorted(children, key=lambda c: c['name'].lower())}
+        return {'path': path.as_posix(), 'parent': parent, 'directories': sorted(children, key=lambda c: c['name'].lower())}

@@ -10,6 +10,7 @@ from fastapi import APIRouter, FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from typing import Literal
 from .attachments import Attachments, MAX_FILE_BYTES
 from .config import BASE, load_config
 from .workspace import Workspaces
@@ -116,7 +117,7 @@ async def logout(request: Request):
 @router.get('/api/config')
 async def public_config(request: Request):
     state = request.app.state
-    return {'roots':[str(r) for r in state.workspaces.roots], 'models':state.codex.models, 'sandbox':state.config['sandbox'], 'authUser':state.codex.running_auth_user}
+    return {'roots':[r.as_posix() for r in state.workspaces.roots], 'models':state.codex.models, 'sandbox':state.config['sandbox'], 'authUser':state.codex.running_auth_user}
 
 @router.get('/api/account/limits')
 async def account_limits(request: Request):
@@ -214,6 +215,7 @@ class Message(BaseModel):
     model: str
     effort: str
     service_tier: str = 'default'
+    sandbox: Literal['read-only', 'workspace-write', 'danger-full-access'] | None = None
 
 class SteerMessage(BaseModel):
     message: str = Field(default='',max_length=100000)
@@ -221,7 +223,7 @@ class SteerMessage(BaseModel):
 
 @router.post('/api/sessions/{sid}/messages')
 async def send(request: Request, sid: str, body: Message):
-    return await request.app.state.codex.send_message(sid, body.message, body.attachments, body.model, body.effort, body.service_tier)
+    return await request.app.state.codex.send_message(sid, body.message, body.attachments, body.model, body.effort, body.service_tier, body.sandbox)
 
 @router.post('/api/sessions/{sid}/steer')
 async def steer(request: Request, sid: str, body: SteerMessage):

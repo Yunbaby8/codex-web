@@ -1,17 +1,19 @@
-host: 0.0.0.0
+host: 127.0.0.1
 port: 5200
 username: codexweb
-password: '' # 必填：不能为空。不要提交 config.yaml。
+password: ''
 allowed_roots:
-  - /home/YOUR_USER/work # 改成自己的 Linux 项目目录，必须已存在。
+- C:/repo
 allowed_origins:
-  - http://127.0.0.1:5200
-  - http://localhost:5200
-  # 其他电脑访问时添加浏览器使用的完整地址，例如 http://192.168.1.100:5200。
-codex_binary: codex
+- http://127.0.0.1:5200
+- http://localhost:5200
+# codex_binary: codex.exe  # Windows；Linux 默认 codex，可省略
 sandbox: workspace-write
-cookie_secure: false # 配置 HTTPS 时改为 true
-# 留空则通过本机 Codex model/list 获取模型与各模型支持的 effort。
+cookie_secure: false
 models: []
-# 文件树默认忽略的名称；设为 [] 显示全部普通目录（符号链接仍不可访问）。
-editor_ignored_names: [.git, build, tmp, node_modules, __pycache__, .venv]
+editor_ignored_names:
+- .git
+- tmp
+- node_modules
+- __pycache__
+- .venv

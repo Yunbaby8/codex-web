@@ -15,35 +15,32 @@ export function createWorkbench({onSidebarCollapsed, refreshGit, layoutEditors})
   }
   applyTheme(localStorage.getItem('codexWebWorkbenchTheme'));
   const narrowWindow=matchMedia('(max-width:700px)');
+  const savedView=localStorage.getItem('codexWebSidebarView');
+  $('sidebarPane').dataset.view=['sessions','files','git'].includes(savedView)?savedView:'files';
   function setSidebarCollapsed(collapsed){
-    $('app').classList.toggle('sidebar-collapsed',collapsed);$('sidebar').inert=collapsed;
+    $('app').classList.toggle('sidebar-collapsed',collapsed);$('sidebarPane').inert=collapsed;
     if(collapsed)onSidebarCollapsed();
     syncLayout();
   }
-  setSidebarCollapsed(narrowWindow.matches||localStorage.getItem('codexWebWorkbenchSidebarCollapsed')!=='false');
-  $('activitySessions').onclick=()=>{const collapsed=!$('app').classList.contains('sidebar-collapsed');setSidebarCollapsed(collapsed);if(!narrowWindow.matches)localStorage.setItem('codexWebWorkbenchSidebarCollapsed',String(collapsed));};
-  narrowWindow.addEventListener('change',()=>setSidebarCollapsed(narrowWindow.matches||localStorage.getItem('codexWebWorkbenchSidebarCollapsed')!=='false'));
+  setSidebarCollapsed(narrowWindow.matches||localStorage.getItem('codexWebSidebarHidden')==='true');
+  narrowWindow.addEventListener('change',()=>setSidebarCollapsed(narrowWindow.matches||localStorage.getItem('codexWebSidebarHidden')==='true'));
   function syncActivityBar(){
-    const sessions=!$('app').classList.contains('sidebar-collapsed');
-    $('gitView').hidden=!$('codeArea').classList.contains('git-mode');
-    $('activitySessions').setAttribute('aria-pressed',String(sessions));
-    $('activityFiles').setAttribute('aria-pressed',String(!sessions&&!$('workbench').classList.contains('code-hidden')&&!$('codeArea').classList.contains('explorer-hidden')&&!$('codeArea').classList.contains('git-mode')));
-    $('activityGit').setAttribute('aria-pressed',String(!sessions&&!$('workbench').classList.contains('code-hidden')&&!$('codeArea').classList.contains('explorer-hidden')&&$('codeArea').classList.contains('git-mode')));
+    const view=$('sidebarPane').dataset.view,hidden=$('app').classList.contains('sidebar-collapsed');
+    $('gitView').hidden=view!=='git';
+    $('sidebar').inert=hidden||view!=='sessions';
+    $('fileExplorer').inert=hidden||view==='sessions';
+    for(const [id,name] of [['activitySessions','sessions'],['activityFiles','files'],['activityGit','git']])$(id).setAttribute('aria-pressed',String(!hidden&&view===name));
   }
-  $('activityFiles').onclick=()=>{
-    const showing=$('activityFiles').getAttribute('aria-pressed')==='true';
-    setSidebarCollapsed(true);localStorage.setItem('codexWebWorkbenchSidebarCollapsed','true');
-    $('workbench').classList.remove('code-hidden');
-    $('codeArea').classList.remove('git-mode');
-    $('codeArea').classList.toggle('explorer-hidden',showing);syncLayout();
-  };
-  $('activityGit').onclick=()=>{
-    const showing=$('activityGit').getAttribute('aria-pressed')==='true';
-    setSidebarCollapsed(true);localStorage.setItem('codexWebWorkbenchSidebarCollapsed','true');
-    $('workbench').classList.remove('code-hidden');$('codeArea').classList.add('git-mode');
-    $('codeArea').classList.toggle('explorer-hidden',showing);syncLayout();
-    if(!showing)refreshGit();
-  };
+  for(const [id,view] of [['activitySessions','sessions'],['activityFiles','files'],['activityGit','git']]){
+    $(id).onclick=()=>{
+      const collapsed=$('sidebarPane').dataset.view===view&&!$('app').classList.contains('sidebar-collapsed');
+      $('sidebarPane').dataset.view=view;
+      setSidebarCollapsed(collapsed);
+      localStorage.setItem('codexWebSidebarView',view);
+      if(!narrowWindow.matches)localStorage.setItem('codexWebSidebarHidden',String(collapsed));
+      if(view==='git'&&!collapsed)refreshGit();
+    };
+  }
   $('activityChat').onclick=()=>{showChat();$('message').focus();};
   $('themeButton').onclick=e=>{
     e.stopPropagation();
@@ -57,17 +54,25 @@ export function createWorkbench({onSidebarCollapsed, refreshGit, layoutEditors})
   document.addEventListener('click',e=>{
     if(!e.target.closest('.theme-control')){$('themeMenu').hidden=true;$('themeButton').setAttribute('aria-expanded','false');}
   });
-  function resize(handle,target,variable,min,max,measured) {
-    const adjust=(base,delta)=>target.style.setProperty(variable,Math.max(min,Math.min(max(),base+delta))+'px');
+  function resize(handle,target,variable,min,max,measured,storageKey,ratio=false) {
+    const saved=Number(localStorage.getItem(storageKey));
+    if(saved>0&&Number.isFinite(saved))target.style.setProperty(variable,ratio?Math.min(85,Math.max(15,saved))+'%':Math.max(min,Math.min(max(),saved))+'px');
+    const adjust=(base,delta)=>{
+      const width=Math.max(min,Math.min(max(),base+delta));
+      target.style.setProperty(variable,ratio?width/target.clientWidth*100+'%':width+'px');
+    };
+    const save=()=>localStorage.setItem(storageKey,parseFloat(target.style.getPropertyValue(variable)));
+    handle.title='拖动调整宽度；双击恢复默认';
     handle.onpointerdown=event=>{
       if(event.button!==0)return;
       event.preventDefault();
       const base=measured.offsetWidth,start=event.clientX;
       handle.setPointerCapture(event.pointerId);
       handle.onpointermove=e=>adjust(base,e.clientX-start);
-      handle.onpointerup=handle.onpointercancel=()=>{handle.onpointermove=null;};
+      handle.onpointerup=handle.onpointercancel=()=>{handle.onpointermove=null;save();};
     };
-    handle.onkeydown=event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const base=measured.offsetWidth;adjust(base,event.key==='ArrowRight'?20:-20);};
+    handle.onkeydown=event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();adjust(measured.offsetWidth,event.key==='ArrowRight'?20:-20);save();};
+    handle.ondblclick=()=>{target.style.removeProperty(variable);localStorage.removeItem(storageKey);layoutEditors();};
   }
   function syncLayoutControls() {
     // The narrow-screen chat-only view still needs an accessible layout button.
@@ -87,12 +92,11 @@ export function createWorkbench({onSidebarCollapsed, refreshGit, layoutEditors})
   };
   if(matchMedia('(max-width:1000px)').matches){$('workbench').classList.add('code-hidden');}
   const sidebarMax=()=>Math.min(innerWidth*.45,Math.max(160,innerWidth-650));
-  resize($('treeResize'),$('app'),'--sidebar-width',160,sidebarMax,$('fileExplorer'));
-  resize($('sessionResize'),$('app'),'--sidebar-width',160,sidebarMax,$('sidebar'));
-  resize($('chatResize'),$('workbench'),'--code-width',320,()=>Math.max(320,$('workbench').clientWidth-360),$('codeArea'));
+  resize($('sessionResize'),$('app'),'--sidebar-width',160,sidebarMax,$('sidebarPane'),'codexWebSidebarWidth');
+  resize($('chatResize'),$('workbench'),'--code-width',320,()=>Math.max(320,$('workbench').clientWidth-360),$('codeArea'),'codexWebCodePercent',true);
 
   function syncLayout(){syncActivityBar();syncLayoutControls();}
-  function showEditor(){ $('workbench').classList.remove('code-hidden');syncLayout(); }
+  function showEditor(){ $('workbench').classList.remove('code-hidden');if(narrowWindow.matches)setSidebarCollapsed(true);else syncLayout(); }
   function showChat({focus=false}={}){
     $('workbench').classList.remove('chat-hidden');
     if(focus&&matchMedia('(max-width:1000px)').matches)$('workbench').classList.add('code-hidden');

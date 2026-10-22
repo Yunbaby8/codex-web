@@ -36,7 +36,7 @@ class CodexManager:
     @staticmethod
     def _auth_identity(path):
         try:
-            auth = json.loads(Path(path).read_text())
+            auth = json.loads(Path(path).read_text(encoding='utf-8'))
             if auth.get('auth_mode') != 'chatgpt':
                 return None
             tokens = auth.get('tokens') or {}
@@ -66,7 +66,7 @@ class CodexManager:
 
     def auth_user(self):
         try:
-            auth = json.loads(self.auth_file.read_text())
+            auth = json.loads(self.auth_file.read_text(encoding='utf-8'))
             mode = str(auth.get('auth_mode') or 'unknown')
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             mode = 'unknown'
@@ -151,15 +151,15 @@ class CodexManager:
         if not selected or service_tier not in {tier['id'] for tier in selected.get('service_tiers', [])}:
             raise ValueError('当前模型不支持所选加速模式')
 
-    def thread_config(self, cwd, model):
-        sandbox=self.config['sandbox']
+    def thread_config(self, cwd, model, sandbox=None):
+        sandbox=sandbox or self.config['sandbox']
         return {'cwd':cwd,'model':model,'sandbox':sandbox,
                 'approvalPolicy':'never' if sandbox=='danger-full-access' else 'on-request',
                 'approvalsReviewer':'user'}
 
     async def create(self, cwd, model, effort):
         async with self.operation_lock:
-            cwd = str(self.workspaces.resolve(cwd))
+            cwd = self.workspaces.resolve(cwd).as_posix()
             self.validate_model(model, effort)
             result = await self.client.rpc('thread/start', self.thread_config(cwd,model))
             sid = result['thread']['id']
@@ -170,18 +170,23 @@ class CodexManager:
     async def resume(self, sid):
         session = self.store.get(sid)
         if sid not in self.loaded:
-            result = await self.client.rpc('thread/resume', {'threadId':sid, **self.thread_config(session['cwd'],session['model'])})
+            result = await self.client.rpc('thread/resume', {'threadId':sid, **self.thread_config(session['cwd'],session['model'],session.get('sandbox'))})
             self.loaded.add(sid)
             self.store.append(sid, {'method':'web/history','params':result['thread']})
         return session
 
-    async def send(self, sid, message, model, effort, service_tier='default', attachments=None):
+    async def send(self, sid, message, model, effort, service_tier='default', attachments=None, sandbox=None):
         async with self.operation_lock:
             if sid in self.active:
                 raise ValueError('当前会话正在执行，请先 Stop 或等待完成')
             self.validate_model(model,effort)
             self.validate_service_tier(model,service_tier)
+            if sandbox is not None and sandbox not in ('read-only', 'workspace-write', 'danger-full-access'):
+                raise ValueError('无效的权限模式')
             session = await self.resume(sid)
+            if sandbox is not None and sandbox != (session.get('sandbox') or self.config['sandbox']):
+                await self.client.rpc('thread/resume', {'threadId':sid, **self.thread_config(session['cwd'],model,sandbox)})
+                self.store.set_sandbox(sid, sandbox)
             self.active[sid] = None
             self.turn_images.setdefault(sid, set()).update(
                 item['path'] for item in (attachments or []) if item['type'] == 'localImage')
@@ -361,7 +366,7 @@ class CodexManager:
         async with self.operation_lock:
             self.validate_model(model,effort)
             thread = (await self.client.rpc('thread/read', {'threadId':sid,'includeTurns':False}))['thread']
-            cwd = str(self.workspaces.resolve(thread['cwd']))
+            cwd = self.workspaces.resolve(thread['cwd']).as_posix()
             if sid not in [s['id'] for s in self.store.list()]:
                 self.store.save(sid,cwd,model,effort,thread.get('name') or thread.get('preview') or 'Imported Session')
             return await self.resume(sid)
@@ -425,12 +430,12 @@ class CodexManager:
             self.attachments.delete_session(sid)
         return {'ok':True}
 
-    async def send_message(self, sid, message, attachment_ids, model, effort, service_tier='default'):
+    async def send_message(self, sid, message, attachment_ids, model, effort, service_tier='default', sandbox=None):
         self.checked(sid)
         extra = self.attachments.inputs(sid,attachment_ids)
         if not message.strip() and not extra: raise ValueError('消息和附件不能同时为空')
-        await self.send(sid,message or '请查看上传的附件。',model,effort,service_tier,extra)
-        return {'ok':True,'title':self.store.get(sid)['title']}
+        await self.send(sid,message or '请查看上传的附件。',model,effort,service_tier,extra,sandbox)
+        return {'ok':True,'title':self.store.get(sid)['title'],'sandbox':self.store.get(sid).get('sandbox') or self.config['sandbox']}
 
     async def steer_message(self, sid, message, attachment_ids):
         self.checked(sid)

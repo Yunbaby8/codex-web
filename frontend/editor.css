@@ -59,7 +59,6 @@
 #workbench{grid-column:3;grid-row:2;--code-width:67%}
 #workbench>#chat{min-width:320px;border-left:1px solid var(--border)}
 #codeArea{max-width:calc(100% - 322px)}
-#app:not(.sidebar-collapsed) #fileExplorer,#app:not(.sidebar-collapsed) #treeResize,#codeArea.explorer-hidden #fileExplorer,#codeArea.explorer-hidden #treeResize{display:none}
 #fileExplorer{background:var(--panel)}
 #fileExplorer>.code-toolbar{height:35px;min-height:35px;border-bottom:0;padding:5px 12px}
 #fileExplorer strong{font:12px system-ui;letter-spacing:1px}
@@ -176,14 +175,9 @@ html[data-theme="classic-black"] #editorPane,html[data-theme="classic-black"] .e
 #treeResize{position:relative}
 #treeResize::after{content:"";position:absolute;top:0;bottom:0;left:-2px;right:-2px;cursor:col-resize}
 
-@media(min-width:1001px){
-  #app.sidebar-collapsed #codeArea:not(.explorer-hidden){min-width:calc(min(var(--sidebar-width,240px),45vw) + 180px)}
-}
 
 #filesView,#gitView{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden}
 #gitView[hidden]{display:none}
-#codeArea.git-mode #filesView{display:none}
-#codeArea.git-mode #gitView{display:flex}
 #filesView>.code-toolbar,#gitView>.code-toolbar{height:35px;min-height:35px;padding:5px 12px}
 #gitView strong{font:12px system-ui;letter-spacing:1px}
 #refreshGit{border:0;background:transparent;color:var(--text);box-shadow:none;font-size:18px;padding:0 4px}

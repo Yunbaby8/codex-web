@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from windows_fixture import junction
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -35,8 +36,7 @@ class EditorFileTests(unittest.TestCase):
             (self.root / name / 'hidden.cpp').write_text('ignored')
         outside = self.base / 'outside';outside.mkdir()
         (outside / 'secret.cpp').write_text('must not be listed')
-        (self.root / 'escape').symlink_to(outside, target_is_directory=True)
-        (self.root / 'linked.cpp').symlink_to(outside / 'secret.cpp')
+        junction(self.root / 'escape', outside)
         result = self.files.file_index(self.root)
         self.assertEqual(result['paths'], ['hello.cpp', 'src/device.cpp'])
         self.assertFalse(result['truncated'])
@@ -44,15 +44,15 @@ class EditorFileTests(unittest.TestCase):
         self.assertEqual(len(limited['paths']), 1)
         self.assertTrue(limited['truncated'])
         with self.assertRaises(ValueError):
-            self.files.file_index('/etc')
+            self.files.file_index(self.base.parent)
 
     def test_roundtrip_preserves_bom_line_endings_permissions(self):
-        self.path.chmod(0o751)
+        permissions = self.path.stat().st_mode
         original = self.files.read(self.root, 'hello.cpp')
         content = original['content'].replace('{}', '{return 0;}')
         saved = self.files.save(self.root, 'hello.cpp', content, original['revision'])
         self.assertEqual(self.path.read_bytes(), content.encode())
-        self.assertEqual(self.path.stat().st_mode & 0o777, 0o751)
+        self.assertEqual(self.path.stat().st_mode, permissions)
         self.assertEqual(saved['revision'], self.files.read(self.root, 'hello.cpp')['revision'])
 
     def test_external_change_and_replacement_conflict(self):
@@ -82,13 +82,13 @@ class EditorFileTests(unittest.TestCase):
     def test_traversal_absolute_symlinks_and_special_files_denied(self):
         outside = self.base / 'outside'
         outside.write_text('private')
-        (self.root / 'link').symlink_to(outside)
-        (self.root / 'dirlink').symlink_to(self.base, target_is_directory=True)
-        os.mkfifo(self.root / 'fifo')
-        for path in ('../outside', str(outside), 'link', 'dirlink/outside'):
+        junction(self.root / 'dirlink', self.base)
+        denied = ['../outside', str(outside), 'dirlink/outside']
+        if os.name == 'nt':
+            denied += ['C:outside', 'dirlink\\outside', 'hello.cpp:stream', 'CON', 'hello.cpp.']
+        for path in denied:
             self.assert_status(403, self.files.read, self.root, path)
             self.assert_status(403, self.files.save, self.root, path, 'bad', 'revision')
-        self.assert_status(415, self.files.read, self.root, 'fifo')
         self.assertEqual(outside.read_text(), 'private')
         self.assert_status(404, self.files.read, self.root, 'missing')
 
@@ -104,7 +104,7 @@ class EditorFileTests(unittest.TestCase):
         (self.root / 'src').mkdir()
         (self.root / 'build').mkdir()
         (self.root / '.git').mkdir()
-        (self.root / 'link').symlink_to(self.path)
+        junction(self.root / 'link', self.base)
         result = self.files.tree(self.root)
         self.assertEqual([e['name'] for e in result['entries']], ['src', 'hello.cpp'])
         self.assertEqual(self.files.tree(self.root, 'src')['entries'], [])

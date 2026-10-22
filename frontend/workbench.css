@@ -232,3 +232,16 @@ html[data-theme] #chat .message.assistant>.role {color:var(--muted);text-transfo
   #chat .message.user {max-width:94%}
   #chat .code-block pre {padding:12px}
 }
+
+/* All navigation views occupy the same column, independently of the editor. */
+#sidebarPane {grid-column:2;grid-row:2;position:relative;min-width:0;min-height:0;display:flex;background:var(--panel)}
+#app.sidebar-collapsed #sidebarPane {display:none}
+#sidebarPane #sidebar,#sidebarPane #fileExplorer {position:static;inset:auto;flex:1;width:100%;min-width:0;min-height:0;display:flex;box-sizing:border-box}
+#sidebarPane[data-view="sessions"] #fileExplorer,#sidebarPane:not([data-view="sessions"]) #sidebar {display:none}
+#sidebarPane[data-view="git"] #filesView {display:none}
+#sidebarPane #sessionResize {right:0}
+@media(max-width:700px) {
+  #sidebarPane {position:absolute;inset:48px auto 24px 0;width:min(var(--sidebar-width,240px),85vw);z-index:40;border-right:1px solid var(--border)}
+}
+
+#composer #permissionMode {max-width:120px;border:0;background:transparent;color:var(--muted);padding:3px 2px;font-size:12px;cursor:pointer}

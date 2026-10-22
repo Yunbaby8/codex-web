@@ -22,7 +22,8 @@ class Attachments:
         aid = uuid.uuid4().hex
         folder = self.root / aid
         folder.mkdir(mode=0o700)
-        path = folder / ('file' + Path(name).suffix[:16])
+        suffix = re.sub(r'[^\w.-]', '_', Path(name).suffix[:16]).rstrip('.')
+        path = folder / ('file' + suffix)
         size = 0
         try:
             with path.open('xb') as target:
@@ -37,7 +38,7 @@ class Attachments:
                      (head.startswith(b'RIFF') and head[8:12] == b'WEBP') or head.startswith((b'GIF87a', b'GIF89a')))
             meta = {'id':aid, 'session':sid, 'name':name, 'size':size, 'image':image, 'file':path.name,
                     'uploaded_at':time.time()}
-            (folder/'metadata.json').write_text(json.dumps(meta, ensure_ascii=False))
+            (folder/'metadata.json').write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
             return {k:meta[k] for k in ('id','name','size','image')}
         except BaseException:
             shutil.rmtree(folder)
@@ -47,7 +48,7 @@ class Attachments:
         if not re.fullmatch(r'[0-9a-f]{32}', aid):
             raise ValueError('附件 ID 无效')
         folder = self.root / aid
-        meta = json.loads((folder/'metadata.json').read_text())
+        meta = json.loads((folder/'metadata.json').read_text(encoding='utf-8'))
         if meta['session'] != sid:
             raise ValueError('附件不属于当前会话')
         return meta, folder / meta['file']
@@ -58,7 +59,7 @@ class Attachments:
         inputs = []
         for aid in ids:
             meta, path = self.get(sid, aid)
-            inputs.append({'type':'text','text':f"用户上传的附件：{json.dumps(meta['name'],ensure_ascii=False)}\nLinux 文件路径：{json.dumps(str(path),ensure_ascii=False)}"})
+            inputs.append({'type':'text','text':f"用户上传的附件：{json.dumps(meta['name'],ensure_ascii=False)}\n服务器文件路径：{json.dumps(str(path),ensure_ascii=False)}"})
             if meta['image']:
                 inputs.append({'type':'localImage','path':str(path)})
         return inputs
@@ -69,7 +70,7 @@ class Attachments:
             metadata = folder / 'metadata.json'
             if not metadata.is_file():
                 continue
-            meta = json.loads(metadata.read_text())
+            meta = json.loads(metadata.read_text(encoding='utf-8'))
             if meta.get('session') != sid:
                 continue
             path = folder / meta['file']
@@ -85,7 +86,7 @@ class Attachments:
     def delete_session(self, sid):
         for folder in self.root.iterdir():
             metadata = folder / 'metadata.json'
-            if metadata.is_file() and json.loads(metadata.read_text()).get('session') == sid:
+            if metadata.is_file() and json.loads(metadata.read_text(encoding='utf-8')).get('session') == sid:
                 shutil.rmtree(folder)
 
     def delete_images(self, sid, paths):
