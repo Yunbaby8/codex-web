@@ -138,6 +138,7 @@ export function createSessions({conversation, composer, workbench}) {
     if(sessionMenuButton===button&&!menu.hidden){closeSessionMenu();return;}
     closeSessionMenu();sessionMenuTarget=session;sessionMenuButton=button;button.setAttribute('aria-expanded','true');
     const active=session.id===current?.id?busy:Boolean(session.active);
+    $('pinSession').textContent=session.pinned?'取消置顶':'置顶会话';$('pinSession').hidden=sessionView==='archived';
     $('archiveSession').textContent=sessionView==='archived'?'已归档':'归档会话';$('archiveSession').disabled=active||sessionView==='archived';$('deleteSession').disabled=active;menu.hidden=false;
     const rect=button.getBoundingClientRect(),margin=8;
     let left=rect.right-menu.offsetWidth,top=rect.bottom+4;
@@ -166,6 +167,14 @@ export function createSessions({conversation, composer, workbench}) {
       composer.forgetSession(session.id);conversation.forgetSession(session.id);
     }
   }
+  $('pinSession').onclick=guarded(async()=>{
+    const target=sessionMenuTarget;if(!target)return;closeSessionMenu();
+    if(!target.web)await api('/sessions/'+encodeURIComponent(target.id)+'/import','POST',{model:$('model').value,effort:$('effort').value});
+    const result=await api('/sessions/'+encodeURIComponent(target.id)+'/pin','POST',{pinned:!target.pinned});
+    Object.assign(target,result,{web:true});listedSessions.set(target.id,target);
+    if(current?.id===target.id)current.pinned=result.pinned;
+    renderSessions();$('status').textContent=result.pinned?'会话已置顶':'已取消置顶';
+  });
   $('renameSession').onclick=()=>{
     renameTarget=sessionMenuTarget;if(!renameTarget)return;closeSessionMenu();
     $('sessionName').value=renameTarget.title||renameTarget.name||renameTarget.preview||'';$('renameError').textContent='';
@@ -209,13 +218,13 @@ export function createSessions({conversation, composer, workbench}) {
   function renderSessions(){
     closeSessionMenu();
     $('sessions').replaceChildren();
-    const query=$('sessionSearch').value.trim().toLocaleLowerCase(),entries=[...listedSessions.values()].filter(s=>String(s.title||s.name||s.preview||s.id).toLocaleLowerCase().includes(query)).sort((a,b)=>(b.updated||b.updatedAt||0)-(a.updated||a.updatedAt||0));
+    const query=$('sessionSearch').value.trim().toLocaleLowerCase(),entries=[...listedSessions.values()].filter(s=>String(s.title||s.name||s.preview||s.id).toLocaleLowerCase().includes(query)).sort((a,b)=>Number(Boolean(b.pinned))-Number(Boolean(a.pinned))||(b.updated||b.updatedAt||0)-(a.updated||a.updatedAt||0));
     $('sessionCount').textContent=listedSessions.size+(nativeCursor?' +':'');
     $('searchScope').textContent=query?'已加载 '+listedSessions.size+' 个会话，匹配 '+entries.length+' 个':'仅搜索当前列表已加载的会话';
     if(!entries.length){$('sessions').textContent=query?'已加载的会话中没有匹配结果。':sessionView==='archived'?'暂未找到已归档会话。':'允许目录内暂未找到会话。';return;}
     for(const s of entries){
       const row=document.createElement('div'),b=document.createElement('button'),more=document.createElement('button');row.className='session-row';b.className='session-select';
-      const title=String(s.title||s.name||s.preview||s.id),titleNode=document.createElement('span');titleNode.className='session-title';titleNode.textContent=(s.active?'● ':'')+title.replace(/\s+/g,' ');b.append(titleNode);
+      const title=String(s.title||s.name||s.preview||s.id),titleNode=document.createElement('span');titleNode.className='session-title';titleNode.textContent=(s.pinned?'📌 ':'')+(s.active?'● ':'')+title.replace(/\s+/g,' ');b.append(titleNode);
       const today=isToday(s),attachments=(today?s.attachments:[])||[];
       if(today){const meta=document.createElement('span');meta.className='session-meta';meta.textContent='今日新开'+(attachments.length?' · 📎 '+attachments.map(attachment=>attachment.name).join('、'):'');meta.title=attachments.length?sessionAttachmentTitle(s):'这个会话创建于今天';b.append(meta);}
       b.title=title+'\n'+s.cwd+'\n'+s.id+(today?'\n今日新开':'')+(attachments.length?'\n'+sessionAttachmentTitle(s):'');

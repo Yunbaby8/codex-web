@@ -139,6 +139,25 @@ class SessionApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored[0]['params']['turns'][0]['webPlan']['plan'][0]['step'], '稍后更新')
         self.assertEqual(store.events('a', cursor)[0]['params']['plan'][0]['step'], '稍后更新')
 
+    async def test_pin_validation_and_workspace_boundary(self):
+        manager = self.app.state.codex
+        manager.client.rpc = AsyncMock(side_effect=AssertionError('Pin must not call Codex'))
+        manager.active['a'] = 'running-turn'
+        result = await self.api.pin_session(self.request, 'a', self.api.SessionPin(pinned=True))
+        self.assertEqual(result['pinned'], 1)
+        result = await self.api.pin_session(self.request, 'a', self.api.SessionPin(pinned=False))
+        self.assertEqual(result['pinned'], 0)
+        with self.assertRaises(ValidationError): self.api.SessionPin(pinned='false')
+        with self.assertRaises(KeyError):
+            await self.api.pin_session(self.request, 'missing', self.api.SessionPin(pinned=True))
+        self.app.state.store.save('outside', self.temp.name, 'test', 'medium')
+        with self.assertRaises(ValueError):
+            await self.api.pin_session(self.request, 'outside', self.api.SessionPin(pinned=True))
+        self.app.state.store.archive('a')
+        with self.assertRaises(ValueError):
+            await self.api.pin_session(self.request, 'a', self.api.SessionPin(pinned=True))
+        manager.active.clear()
+
     async def test_rename_validation_and_workspace_boundary(self):
         result = await self.api.rename_session(self.request, 'a', self.api.SessionName(title='  电源分析  '))
         self.assertEqual(result['title'], '电源分析')

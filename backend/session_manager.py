@@ -28,7 +28,9 @@ class SessionStore:
             self.db.execute("UPDATE sessions SET title_set=1 WHERE title NOT IN ('New Session','Imported Session','')")
         if 'sandbox' not in columns:
             self.db.execute('ALTER TABLE sessions ADD COLUMN sandbox TEXT')
-        if not {'archived', 'created', 'title_set', 'sandbox'} <= columns:
+        if 'pinned' not in columns:
+            self.db.execute('ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0')
+        if not {'archived', 'created', 'title_set', 'sandbox', 'pinned'} <= columns:
             self.db.commit()
 
     def save(self, sid, cwd, model, effort, title='New Session'):
@@ -49,6 +51,13 @@ class SessionStore:
         with self.db:
             self.db.execute('UPDATE sessions SET sandbox=? WHERE id=?', (sandbox, sid))
 
+    def set_pinned(self, sid, pinned):
+        session = self.get(sid)
+        if session['archived']:
+            raise ValueError('已归档会话不能置顶')
+        with self.db:
+            self.db.execute('UPDATE sessions SET pinned=? WHERE id=?', (int(pinned), sid))
+
     def rename(self, sid, title):
         self.get(sid)
         title = title.strip()
@@ -64,10 +73,10 @@ class SessionStore:
         return dict(row)
 
     def list(self, archived=False):
-        return [dict(r) for r in self.db.execute('SELECT * FROM sessions WHERE archived=? ORDER BY updated DESC', (int(archived),))]
+        return [dict(r) for r in self.db.execute('SELECT * FROM sessions WHERE archived=? ORDER BY pinned DESC, updated DESC', (int(archived),))]
 
     def archive(self, sid):
-        self.db.execute('UPDATE sessions SET archived=1 WHERE id=?', (sid,))
+        self.db.execute('UPDATE sessions SET archived=1,pinned=0 WHERE id=?', (sid,))
         self.db.commit()
 
     def delete(self, sid):

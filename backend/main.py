@@ -198,6 +198,13 @@ async def session(request: Request, sid: str):
 async def archive_session(request: Request, sid: str):
     return await request.app.state.codex.archive_session(sid)
 
+class SessionPin(BaseModel):
+    pinned: bool = Field(strict=True)
+
+@router.post('/api/sessions/{sid}/pin')
+async def pin_session(request: Request, sid: str, body: SessionPin):
+    return await request.app.state.codex.pin_session(sid, body.pinned)
+
 class SessionName(BaseModel):
     title: str = Field(min_length=1, max_length=120)
 

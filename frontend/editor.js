@@ -92,23 +92,14 @@ export function createEditor(workbench) {
     if(!loading)loading=(async()=>{
       const css=document.createElement('link');css.rel='stylesheet';css.href='/static/vendor/editor-entry.css';document.head.append(css);
       const module=await import('/static/vendor/editor-entry.js');monaco=module.monaco;
-      monaco.editor.defineTheme('codex-black',{base:'vs-dark',inherit:true,rules:module.highlightingRules(),colors:{
-        'editor.background':'#16181c','editorGutter.background':'#16181c',
-        'editor.lineHighlightBackground':'#20242a','editor.lineHighlightBorder':'#20242a'
-      }});
-      monaco.editor.defineTheme('codex-blue',{base:'vs-dark',inherit:true,rules:module.highlightingRules(),colors:{
-        'editor.background':'#0b1424','editorGutter.background':'#0b1424',
-        'editor.foreground':'#d6e2f0','editor.lineHighlightBackground':'#122139',
-        'editor.lineHighlightBorder':'#1c2d44','editorLineNumber.foreground':'#7187a2',
-        'editor.selectionBackground':'#294d75','editorWidget.background':'#162338',
-        'editorWidget.border':'#2a3a50','editorOverviewRuler.background':'#0b1424'
-      }});
       for(const [name,base,background,foreground,panel,border,highlight,selection,lineNumber] of [
-        ['white','vs','#ffffff','#263244','#f3f5f7','#e0e5ec','#f0f3f7','#b8d5eb','#667680'],
-        ['green','vs-dark','#0c1c16','#d9e7df','#1b3329','#365447','#142a20','#315a46','#789c88'],
-        ['red','vs-dark','#231115','#eddbdf','#392027','#62414a','#311b22','#68404d','#ad8792'],
-        ['yellow','vs-dark','#28200d','#ece3c8','#40351a','#675831','#362b13','#6a5729','#ac9a66'],
-        ['beige','vs','#e8ddc4','#403b30','#f7f0df','#c9bca0','#ddd0b3','#cfc099','#81765e']
+        ['black','vs-dark','#000000','#e6e6e6','#0c0c0c','#292929','#181818','#242424','#929292'],
+        ['white','vs','#ffffff','#252525','#f5f5f5','#e2e2e2','#f5f5f5','#ebebeb','#737373'],
+        ['blue','vs-dark','#11151b','#e1e5eb','#191e26','#303945','#222832','#2c3440','#909eae'],
+        ['green','vs-dark','#121714','#e1e7e2','#1b211d','#344239','#242c26','#303b33','#93a598'],
+        ['red','vs-dark','#181516','#e9e2e4','#221e20','#453a3e','#2d2729','#3c3336','#a99a9f'],
+        ['yellow','vs','#fffcf4','#373228','#f5f0e3','#ded5c2','#f5f0e3','#ebe3d1','#7b705c'],
+        ['beige','vs','#faf8f3','#37342e','#f0ede6','#ddd7cd','#f0ede6','#e6e1d8','#787165']
       ])monaco.editor.defineTheme('codex-'+name,{base,inherit:true,rules:module.highlightingRules(base==='vs'),colors:{
         'editor.background':background,'editorGutter.background':background,'editor.foreground':foreground,
         'editor.lineHighlightBackground':highlight,'editor.lineHighlightBorder':highlight,

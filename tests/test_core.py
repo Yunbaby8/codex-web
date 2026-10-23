@@ -37,6 +37,34 @@ class WorkspaceTests(unittest.TestCase):
             with self.assertRaises(ValueError):w.resolve_file(str(root))
 
 class StoreTests(unittest.TestCase):
+    def test_pinning_migration_order_persistence_and_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sessions.db'
+            db = sqlite3.connect(path)
+            db.execute('CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, model TEXT NOT NULL, effort TEXT NOT NULL, title TEXT NOT NULL, updated REAL NOT NULL)')
+            db.execute("INSERT INTO sessions VALUES ('old','/tmp','m','medium','Existing title',1)")
+            db.commit(); db.close()
+            store = SessionStore(path)
+            self.assertEqual(store.get('old')['pinned'], 0)
+            store.save('new', '/tmp', 'm', 'medium')
+            store.set_pinned('old', True)
+            self.assertEqual([s['id'] for s in store.list()], ['old', 'new'])
+            self.assertEqual(store.get('old')['updated'], 1)
+            store.db.close()
+            store = SessionStore(path)
+            self.assertEqual(store.get('old')['pinned'], 1)
+            self.assertEqual(store.get('old')['title'], 'Existing title')
+            store.set_pinned('old', False)
+            self.assertEqual([s['id'] for s in store.list()], ['new', 'old'])
+            store.set_pinned('old', True)
+            store.save('old', '/tmp', 'm', 'medium')
+            self.assertEqual(store.get('old')['pinned'], 1)
+            store.archive('old')
+            self.assertEqual(store.get('old')['pinned'], 0)
+            with self.assertRaises(ValueError): store.set_pinned('old', True)
+            with self.assertRaises(KeyError): store.set_pinned('missing', True)
+            store.db.close()
+
     def test_title_survives_followups_rename_and_reopen(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'sessions.db';store=SessionStore(path)

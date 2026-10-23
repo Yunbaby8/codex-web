@@ -416,6 +416,12 @@ class CodexManager:
             self.store.archive(sid)
         return {'ok':True}
 
+    async def pin_session(self, sid, pinned):
+        async with self.operation_lock:
+            self.checked(sid)
+            self.store.set_pinned(sid, pinned)
+            return self.store.get(sid)
+
     async def rename_session(self, sid, title):
         async with self.operation_lock:
             self.checked(sid)
