@@ -166,7 +166,7 @@ export function createConversation({getCurrent, getWorkspace, getRoots, setWorks
     const textarea=document.createElement('textarea');textarea.value=text;textarea.className='copy-source';document.body.append(textarea);textarea.select();const copied=document.execCommand('copy');textarea.remove();if(!copied)throw Error('浏览器不允许复制，请手动选择内容');done();return Promise.resolve();
   }
   function copyButton(text,label='复制'){
-    const button=document.createElement('button');button.type='button';button.className='copy-button';button.title=label;button.setAttribute('aria-label',label);button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>'+label+'</span>';button.onclick=guarded(()=>copyText(text,button));return button;
+    const button=document.createElement('button');button.type='button';button.className='copy-button';button.title=label;button.setAttribute('aria-label',label);button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><g class="copy-icon"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></g><path class="copy-check" d="m5 12 4 4L19 6"/></svg><span>'+label+'</span>';button.onclick=guarded(()=>copyText(text,button));return button;
   }
   function actionButton(label,icon,action){
     const button=document.createElement('button');button.type='button';button.className='answer-action';button.title=label;button.setAttribute('aria-label',label);button.innerHTML=icon;button.onclick=guarded(()=>action(button));return button;
