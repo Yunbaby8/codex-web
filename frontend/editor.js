@@ -6,6 +6,7 @@ export function createEditor(workbench) {
   let workspace = '', active = null, editor = null, monaco = null, loading = null, selection = 0, treeGeneration = 0;
   let syncGeneration=0, syncTimer=null;
   let gitGeneration=0, diffEditor=null, diffModels=[], diffVisible=false;
+  let gitMode='changes', history=null, historyCommit=null, historyScroll=0;
   const keyFor = (root, path) => JSON.stringify([root,path]);
   const text = file => file.model.getValue(undefined, true);
   const dirty = file => text(file) !== file.savedText;
@@ -279,6 +280,7 @@ export function createEditor(workbench) {
     notice([...files.values()].some(f=>f.workspace!==root&&dirty(f))?'其他工作区的未保存编辑仍保留，切回可继续编辑。':'');
     el('fileTree').replaceChildren();
     gitGeneration++;updateGitCount(0);el('refreshGit').disabled=false;el('gitChanges').replaceChildren();el('gitBranch').textContent='';
+    history=null;historyCommit=null;historyScroll=0;el('gitCommitList').replaceChildren();el('gitCommitDetail').hidden=true;el('gitLoadMore').hidden=true;
     el('statusBranch').textContent='';el('statusBranch').hidden=true;
     syncWorkspace(root);
   }
@@ -296,6 +298,7 @@ export function createEditor(workbench) {
   }
   async function refreshGit() {
     if(!workspace)return;
+    if(gitMode==='history')return refreshHistory();
     const root=workspace,ticket=++gitGeneration;
     el('gitNotice').textContent='正在读取 Git 状态…';el('refreshGit').disabled=true;
     el('gitChanges').replaceChildren();
@@ -325,16 +328,82 @@ export function createEditor(workbench) {
     } catch(error) {if(ticket===gitGeneration){updateGitCount(0);el('gitNotice').textContent=error.message;el('statusBranch').textContent='';el('statusBranch').hidden=true;}}
     finally {if(ticket===gitGeneration)el('refreshGit').disabled=false;}
   }
+  function switchGitMode(mode) {
+    if(mode===gitMode)return;
+    gitGeneration++;selection++;closeDiff();render();gitMode=mode;
+    el('gitChanges').hidden=mode!=='changes';el('gitHistory').hidden=mode!=='history';
+    el('gitChangesTab').setAttribute('aria-selected',String(mode==='changes'));
+    el('gitHistoryTab').setAttribute('aria-selected',String(mode==='history'));
+    el('refreshGit').disabled=false;el('gitNotice').textContent='';
+    if(mode==='history'&&history){renderHistory();}else refreshGit();
+  }
+  function commitDate(value) {return new Date(value).toLocaleString();}
+  function renderHistory() {
+    const list=el('gitCommitList');list.replaceChildren();list.hidden=Boolean(historyCommit);
+    el('gitCommitDetail').hidden=!historyCommit;
+    el('gitLoadMore').hidden=Boolean(historyCommit)||history?.nextOffset==null;
+    el('gitLoadMore').disabled=false;
+    if(historyCommit)return;
+    for(const commit of history?.commits||[]) {
+      const button=document.createElement('button'),subject=document.createElement('span'),info=document.createElement('span');
+      button.type='button';button.className='git-commit';button.dataset.commit=commit.id;
+      subject.className='git-commit-subject';subject.textContent=commit.subject||'（无提交说明）';
+      info.className='git-commit-info';info.textContent=commit.id.slice(0,8)+' · '+commit.author+' · '+commitDate(commit.date);
+      button.title=subject.textContent+'\n'+info.textContent;button.append(subject,info);
+      button.onclick=()=>openCommit(commit.id);list.append(button);
+    }
+    el('gitHistory').scrollTop=historyScroll;
+    el('gitNotice').textContent=history&&!history.repository?'当前工作区不是 Git 仓库':history&&!history.commits.length?'当前工作区没有提交记录':'';
+  }
+  async function refreshHistory(append=false) {
+    if(!workspace||append&&history?.nextOffset==null)return;
+    const root=workspace,ticket=++gitGeneration,params={workspace:root};
+    if(append){params.head=history.head;params.offset=history.nextOffset;historyScroll=el('gitHistory').scrollTop;}
+    else {selection++;closeDiff();render();history=null;historyCommit=null;historyScroll=0;renderHistory();}
+    el('gitNotice').textContent='正在读取提交记录…';el('refreshGit').disabled=true;el('gitLoadMore').disabled=true;
+    try {
+      const data=await gitRequest('history',params);
+      if(ticket!==gitGeneration||root!==workspace||gitMode!=='history')return;
+      history={...data,commits:append?[...history.commits,...data.commits]:data.commits};
+      el('gitBranch').textContent=data.repository?'⑂ '+data.branch:'';
+      el('gitBranch').title=el('gitBranch').textContent;
+      renderHistory();
+    } catch(error){if(ticket===gitGeneration)el('gitNotice').textContent=error.message;}
+    finally {if(ticket===gitGeneration){el('refreshGit').disabled=false;el('gitLoadMore').disabled=false;}}
+  }
+  async function openCommit(commit) {
+    const root=workspace,ticket=++gitGeneration;
+    historyScroll=el('gitHistory').scrollTop;el('gitNotice').textContent='正在读取提交详情…';
+    el('refreshGit').disabled=false;
+    try {
+      const data=await gitRequest('commit',{workspace:root,commit});
+      if(ticket!==gitGeneration||root!==workspace||gitMode!=='history')return;
+      selection++;closeDiff();render();historyCommit=data;renderHistory();el('gitNotice').textContent='';
+      el('gitCommitMeta').textContent=data.id+'\n'+data.author+' · '+commitDate(data.date);
+      el('gitCommitMessage').textContent=data.message||'（无提交说明）';
+      el('gitCommitBase').textContent=(data.base?(data.parents.length>1?'合并提交 · 与第一个父提交 ':'与父提交 ')+data.base.slice(0,8)+' 比较':'首次提交 · 与空目录比较')+' · '+data.entries.length+' 个改动文件';
+      const host=el('gitCommitFiles');host.replaceChildren();
+      for(const entry of data.entries) {
+        const button=document.createElement('button'),name=document.createElement('span'),status=document.createElement('span');
+        button.type='button';button.className='git-file';button.dataset.path=entry.path;
+        name.textContent=entry.originalPath&&entry.originalPath!==entry.path?entry.originalPath+' → '+entry.path:entry.path;
+        status.textContent=({A:'新增',M:'修改',D:'删除',R:'重命名',C:'复制',T:'类型改变'})[entry.status]||entry.status;
+        status.className='git-status git-status-'+entry.status;button.title=name.textContent+' · '+status.textContent;
+        button.append(name,status);button.onclick=run(()=>openDiff(entry,root,data.id));host.append(button);
+      }
+      el('gitHistory').scrollTop=0;
+    } catch(error){if(ticket===gitGeneration)el('gitNotice').textContent=error.message;}
+  }
   function closeDiff() {
     if(!diffVisible)return;
     diffVisible=false;diffEditor?.setModel(null);
     for(const model of diffModels)model.dispose();diffModels=[];
     el('gitDiffPane').hidden=true;
   }
-  async function openDiff(entry,root) {
+  async function openDiff(entry,root,commit=null) {
     if(root!==workspace)return;
     const ticket=++selection;notice('正在读取差异…');
-    const [data]=await Promise.all([gitRequest('diff',{workspace:root,path:entry.path,group:entry.group}),loadEditor()]);
+    const [data]=await Promise.all([gitRequest(commit?'commit-diff':'diff',commit?{workspace:root,path:entry.path,commit}:{workspace:root,path:entry.path,group:entry.group}),loadEditor()]);
     if(ticket!==selection||root!==workspace)return;
     if(active)active.view=editor.saveViewState();
     closeDiff();
@@ -345,14 +414,18 @@ export function createEditor(workbench) {
       smoothScrolling:false,cursorBlinking:'solid',cursorSmoothCaretAnimation:'off'
     });
     diffModels=[data.original,data.modified].map((content,index)=>monaco.editor.createModel(content,language(entry.path),monaco.Uri.from({
-      scheme:'git-view',authority:encodeURIComponent(root),path:'/'+entry.path,query:entry.group+'-'+index
+      scheme:'git-view',authority:encodeURIComponent(root),path:'/'+entry.path,query:(commit||entry.group)+'-'+index
     })));
     diffEditor.setModel({original:diffModels[0],modified:diffModels[1]});diffVisible=true;
-    el('gitDiffPane').hidden=false;el('gitDiffTitle').textContent=entry.path+' · 差异对比（只读）';
+    el('gitDiffPane').hidden=false;el('gitDiffTitle').textContent=entry.path+(commit?' · '+commit.slice(0,8):'')+' · 差异对比（只读）';
     el('gitOriginalLabel').textContent=data.labels[0];el('gitModifiedLabel').textContent=data.labels[1];
     workbench.showEditor();render();diffEditor.layout();
-    notice('对比内容来自 Git 和磁盘；编辑器尚未保存的修改不包含在内。');
+    notice(commit?'历史提交对比 · 左侧为提交前，右侧为提交后。':'对比内容来自 Git 和磁盘；编辑器尚未保存的修改不包含在内。');
   }
+  el('gitChangesTab').onclick=()=>switchGitMode('changes');
+  el('gitHistoryTab').onclick=()=>switchGitMode('history');
+  el('gitLoadMore').onclick=()=>refreshHistory(true);
+  el('gitHistoryBack').onclick=()=>{gitGeneration++;selection++;closeDiff();render();historyCommit=null;renderHistory();notice('');};
   el('closeGitDiff').onclick=()=>{selection++;closeDiff();render();editor?.layout();notice('');};
   el('refreshGit').onclick=()=>{selection++;closeDiff();render();refreshGit();};
   el('saveFile').onclick=run(save);

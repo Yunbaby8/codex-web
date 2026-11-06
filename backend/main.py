@@ -155,6 +155,18 @@ def git_status(request: Request, workspace: str):
 def git_diff(request: Request, workspace: str, path: str, group: str):
     return request.app.state.git_view.diff(workspace, path, group)
 
+@router.get('/api/git/history')
+def git_history(request: Request, workspace: str, head: str | None = None, offset: int = 0, limit: int = 50):
+    return request.app.state.git_view.history(workspace, head, offset, limit)
+
+@router.get('/api/git/commit')
+def git_commit(request: Request, workspace: str, commit: str):
+    return request.app.state.git_view.commit(workspace, commit)
+
+@router.get('/api/git/commit-diff')
+def git_commit_diff(request: Request, workspace: str, commit: str, path: str):
+    return request.app.state.git_view.commit_diff(workspace, commit, path)
+
 class EditorSave(BaseModel):
     workspace: str = Field(max_length=4096)
     path: str = Field(min_length=1, max_length=4096)

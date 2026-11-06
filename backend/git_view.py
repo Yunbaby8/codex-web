@@ -1,5 +1,6 @@
 """Read-only Git status and bounded text snapshots; never runs a shell; comparisons use raw Git blobs."""
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path, PureWindowsPath
@@ -117,11 +118,12 @@ class GitView:
 
     def blob(self, root, repo, path, revision):
         repo_path = (root / path).relative_to(repo).as_posix()
-        if revision == 'HEAD':
-            code, _ = self.run(repo, 'rev-parse', '--verify', 'HEAD', check=False)
-            if code:
-                return ''  # Unborn branch.
-            _, raw = self.run(repo, 'ls-tree', '-z', 'HEAD', '--', repo_path)
+        if revision != 'INDEX':
+            if revision == 'HEAD':
+                code, _ = self.run(repo, 'rev-parse', '--verify', 'HEAD', check=False)
+                if code:
+                    return ''  # Unborn branch.
+            _, raw = self.run(repo, 'ls-tree', '-z', revision, '--', repo_path)
         else:
             _, raw = self.run(repo, 'ls-files', '--stage', '-z', '--', repo_path)
         if not raw:
@@ -135,7 +137,7 @@ class GitView:
         fields = metadata.split()
         if fields[0] not in (b'100644', b'100755'):
             raise HTTPException(415, '符号链接、子模块和特殊文件暂不支持差异对比')
-        oid = fields[2] if revision == 'HEAD' else fields[1]
+        oid = fields[1] if revision == 'INDEX' else fields[2]
         _, size = self.run(repo, 'cat-file', '-s', oid.decode('ascii'))
         if int(size) > MAX_EDITOR_BYTES:
             raise HTTPException(413, '文件超过 2 MiB，暂不支持差异对比')
@@ -149,6 +151,87 @@ class GitView:
         if any(ord(c) < 32 and c not in '\t\r\n\f' for c in text):
             raise HTTPException(415, '二进制文件，暂不支持差异对比')
         return text
+
+    def commit_id(self, repo, value):
+        if not re.fullmatch(r'(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})', value):
+            raise HTTPException(400, '提交 ID 格式不正确，请从提交记录中选择')
+        code, kind = self.run(repo, 'cat-file', '-t', value, check=False)
+        if code or kind.strip() != b'commit':
+            raise HTTPException(404, '提交已不存在或尚未下载到本地，请刷新记录')
+        return value.lower()
+
+    def history(self, workspace, head=None, offset=0, limit=50):
+        if not 0 <= offset <= 1000000 or not 1 <= limit <= 100:
+            raise HTTPException(400, '提交记录分页参数不正确')
+        root, repo = self.repository(workspace)
+        if repo is None:
+            return dict(repository=False, commits=[], head=None, nextOffset=None)
+        _, branch = self.run(root, 'symbolic-ref', '--quiet', '--short', 'HEAD', check=False)
+        if head:
+            head = self.commit_id(repo, head)
+        else:
+            code, raw = self.run(repo, 'rev-parse', '--verify', 'HEAD', check=False)
+            if code:
+                return dict(repository=True, branch=os.fsdecode(branch).strip(), commits=[], head=None, nextOffset=None)
+            head = self.commit_id(repo, raw.decode('ascii').strip())
+        # Anchor subsequent pages to this HEAD even if a new commit arrives meanwhile.
+        scope = ['--', '.'] if root != repo else ['--']
+        _, raw = self.run(root, 'log', '--full-history', '--date-order', '--no-decorate',
+                          '--encoding=UTF-8', '-z', '--format=%H%x00%an%x00%aI%x00%s',
+                          '--skip=' + str(offset), '-n', str(limit + 1), head, *scope)
+        fields = raw.decode('utf-8', errors='replace').split('\0')[:-1]
+        commits = [dict(id=fields[i], author=fields[i+1], date=fields[i+2], subject=fields[i+3])
+                   for i in range(0, len(fields), 4)]
+        return dict(repository=True, branch=os.fsdecode(branch).strip() or head[:8], head=head,
+                    commits=commits[:limit], nextOffset=offset+limit if len(commits)>limit else None)
+
+    def commit(self, workspace, commit):
+        root, repo = self.repository(workspace)
+        if repo is None:
+            raise HTTPException(404, '当前工作区不是 Git 仓库')
+        commit = self.commit_id(repo, commit)
+        _, raw = self.run(repo, 'show', '-s', '--no-show-signature', '--encoding=UTF-8',
+                          '--format=%an%x00%aI%x00%B', commit, '--')
+        author, date, message = raw.decode('utf-8', errors='replace').split('\0', 2)
+        # Read real parents: pretty-format %P hides missing parents in shallow clones.
+        _, raw_commit = self.run(repo, 'cat-file', 'commit', commit)
+        parents = [line[7:].decode('ascii') for line in raw_commit.split(b'\n\n', 1)[0].splitlines()
+                   if line.startswith(b'parent ')]
+        base = parents[0] if parents else None
+        if base:
+            self.commit_id(repo, base)
+        revisions = [base, commit] if base else ['--root', commit]
+        _, raw = self.run(root, 'diff-tree', '-r', '--no-commit-id', '--name-status', '-z',
+                          '--no-ext-diff', '--no-textconv', '--find-renames', *revisions, '--', '.')
+        records = iter(raw.split(b'\0')[:-1])
+        entries = []
+        for status in records:
+            original = os.fsdecode(next(records))
+            path = os.fsdecode(next(records)) if status[:1] in (b'R', b'C') else original
+            path = self.relative(path, root, repo)
+            try:
+                original = self.relative(original, root, repo)
+            except HTTPException:
+                original = None
+            if len(entries) >= 10000:
+                raise HTTPException(413, '提交改动超过 10000 项，请选择更小的工作区')
+            entries.append(dict(path=path, originalPath=original, status=status[:1].decode('ascii')))
+        return dict(id=commit, author=author, date=date, message=message.rstrip('\n'),
+                    parents=parents, base=base, entries=entries)
+
+    def commit_diff(self, workspace, commit, path):
+        detail = self.commit(workspace, commit)
+        entry = next((e for e in detail['entries'] if e['path'] == path), None)
+        if entry is None:
+            raise HTTPException(404, '该文件不在本次提交的工作区改动中')
+        if entry['originalPath'] is None:
+            raise HTTPException(403, '重命名前的文件位于当前工作区之外，无法读取对比')
+        root, repo = self.repository(workspace)
+        original = '' if not detail['base'] or entry['status'] == 'A' else self.blob(root, repo, entry['originalPath'], detail['base'])
+        modified = '' if entry['status'] == 'D' else self.blob(root, repo, path, detail['id'])
+        return dict(**entry, original=original, modified=modified,
+                    labels=['提交前 ' + detail['base'][:8] if detail['base'] else '首次提交前（空）',
+                            '提交后 ' + detail['id'][:8]])
 
     def diff(self, workspace, path, group):
         root, repo = self.repository(workspace)

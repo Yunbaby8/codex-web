@@ -1,5 +1,6 @@
 """Session endpoints with temporary configuration and a fake Codex transport."""
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -38,6 +39,30 @@ class SessionApiTests(unittest.IsolatedAsyncioTestCase):
             await lifespan.__aenter__()
         self.addAsyncCleanup(lifespan.__aexit__, None, None, None)
         self.app.state.store.save('a', str(self.workspace), 'test', 'medium')
+
+    @unittest.skipIf(httpx is None, 'Optional httpx dependency is not installed')
+    async def test_commit_history_endpoints_require_login_and_return_git_snapshots(self):
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(self.workspace), *args], stderr=subprocess.DEVNULL).decode().strip()
+        git('init', '-b', 'main');git('config', 'user.name', 'Fixture');git('config', 'user.email', 'fixture@example.invalid')
+        (self.workspace/'file.txt').write_text('historical content')
+        git('add', '.');git('commit', '-m', 'history fixture')
+        commit = git('rev-parse', 'HEAD')
+        transport = httpx.ASGITransport(app=self.app)
+        params = dict(workspace=str(self.workspace), commit=commit, path='file.txt')
+        async with httpx.AsyncClient(transport=transport, base_url='http://localhost') as client:
+            for kind in ('history', 'commit', 'commit-diff'):
+                self.assertEqual((await client.get('/api/git/'+kind, params=params)).status_code, 401)
+            await client.post('/api/login', headers={'X-Codex-Web':'1'}, json=dict(username='fixture', password='fixture-only'))
+            history = await client.get('/api/git/history', params=params)
+            self.assertEqual(history.status_code, 200)
+            self.assertEqual(history.json()['commits'][0]['id'], commit)
+            detail = await client.get('/api/git/commit', params=params)
+            self.assertEqual(detail.json()['entries'][0]['status'], 'A')
+            diff = await client.get('/api/git/commit-diff', params=params)
+            self.assertEqual(diff.json()['modified'], 'historical content')
+            self.assertEqual((await client.get('/api/git/commit', params={**params, 'commit':'--all'})).status_code, 400)
+            self.assertEqual((await client.get('/api/git/history', params={**params, 'workspace':self.temp.name})).status_code, 400)
 
     @unittest.skipIf(httpx is None, 'Optional httpx dependency is not installed')
     async def test_editor_http_auth_security_and_conflict(self):

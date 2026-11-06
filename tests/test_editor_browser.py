@@ -6,6 +6,7 @@ import mimetypes
 import os
 import re
 import threading
+import tempfile
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -53,6 +54,21 @@ class FixtureHandler(BaseHTTPRequestHandler):
             return self.respond(dict(data=[], nextCursor=None))
         if url.path == '/api/git/status':
             return self.respond(dict(repository=True, branch='main', detached=False, entries=self.server.git_entries))
+        if url.path == '/api/git/history':
+            offset = int(parse_qs(url.query).get('offset', ['0'])[0])
+            return self.respond(dict(repository=True, branch='main', head='a'*40,
+                commits=self.server.git_history[offset:offset+50], nextOffset=offset+50 if len(self.server.git_history)>offset+50 else None))
+        if url.path == '/api/git/commit':
+            commit = parse_qs(url.query)['commit'][0]
+            return self.respond(dict(id=commit, author='测试作者', date='2026-11-05T10:00:00+08:00',
+                message='测试提交\n\n完整说明 <script>不会执行</script>', parents=['b'*40, 'c'*40], base='b'*40,
+                entries=[dict(path='src/main.cpp', originalPath='src/old.cpp', status='R'),dict(path='binary.bin', originalPath='binary.bin', status='A')]))
+        if url.path == '/api/git/commit-diff':
+            params = parse_qs(url.query)
+            if params['path'][0] == 'binary.bin':
+                return self.respond(dict(detail='二进制文件，暂不支持差异对比'), 415)
+            return self.respond(dict(path='src/main.cpp', original='historical before\n', modified='historical after\n',
+                labels=['提交前 bbbbbbbb', '提交后 '+params['commit'][0][:8]]))
         if url.path == '/api/git/diff':
             params = parse_qs(url.query)
             if params['path'][0] == 'binary.bin':
@@ -107,6 +123,7 @@ class EditorBrowserTests(unittest.TestCase):
         self.server.limits = dict(authUser=dict(label='fixture-account', mode='chatgpt'), windows=dict(fiveHour=dict(remainingPercent=68,resetsAt=1900000000),weekly=dict(remainingPercent=42,resetsAt=2000000000)),updatedAt=1800000000,message='')
         self.server.files = {'src/main.cpp': ('int main() {\n    return 0;\n}\n', 1), 'src/task.bb': ('SUMMARY = "test"\n', 1)}
         self.server.git_entries = [dict(path='src/main.cpp', group='staged', status='M'),dict(path='src/main.cpp', group='unstaged', status='M'),dict(path='src/task.bb', group='untracked', status='?')]
+        self.server.git_history = [dict(id=f'{200-i:040x}', subject=f'提交 {i} · 中文说明', author='测试作者', date='2026-11-05T10:00:00+08:00') for i in range(52)]
         self.errors = []
         self.page = self.browser.new_page(viewport=dict(width=1600, height=960))
         self.page.add_init_script('window.EventSource=class {close(){} addEventListener(){}};')
@@ -338,7 +355,7 @@ class EditorBrowserTests(unittest.TestCase):
         self.assertIn('// edited', self.server.files['src/main.cpp'][0])
         self.page.get_by_role('button', name='关闭 src/task.bb', exact=True).click()
         self.assertEqual(self.page.evaluate('testMonaco.editor.getModels().length'), 1)
-        self.page.screenshot(path='/tmp/codex-web-monaco.png')
+        self.page.screenshot(path=str(Path(tempfile.gettempdir())/'codex-web-monaco.png'))
 
     def test_conflict_reload_and_workspace_drafts(self):
         self.page.evaluate(self.model()+".setValue('our edit')")
@@ -451,7 +468,7 @@ class EditorBrowserTests(unittest.TestCase):
         expect(self.page.locator('html')).to_have_attribute('data-theme', 'tech')
         self.page.locator('#themeButton').click()
         self.page.locator('[data-theme-option="classic-black"]').click()
-        self.page.screenshot(path='/tmp/codex-web-vscode-mobile.png')
+        self.page.screenshot(path=str(Path(tempfile.gettempdir())/'codex-web-vscode-mobile.png'))
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'), 390)
 
     def test_workspace_dropdown_selection_and_dismissal(self):
@@ -482,7 +499,7 @@ class EditorBrowserTests(unittest.TestCase):
         box = panel.bounding_box()
         self.assertGreaterEqual(box['x'], 0)
         self.assertLessEqual(box['x']+box['width'], 390)
-        self.page.screenshot(path='/tmp/codex-web-workspace-dropdown.png')
+        self.page.screenshot(path=str(Path(tempfile.gettempdir())/'codex-web-workspace-dropdown.png'))
 
     def test_file_and_session_sidebars_share_width(self):
         def drag(handle, delta):
@@ -542,7 +559,7 @@ class EditorBrowserTests(unittest.TestCase):
         self.page.locator('.git-file[data-group=unstaged]').click()
         expect(self.page.locator('#gitOriginalLabel')).to_have_text('暂存区')
         self.assertEqual(self.page.evaluate("testMonaco.editor.getModels().filter(m=>m.uri.scheme==='git-view').length"), 2)
-        self.page.screenshot(path='/tmp/codex-web-git-diff.png')
+        self.page.screenshot(path=str(Path(tempfile.gettempdir())/'codex-web-git-diff.png'))
         self.page.locator('#closeGitDiff').click()
         self.assertEqual(self.page.evaluate("testMonaco.editor.getModels().filter(m=>m.uri.scheme==='git-view').length"), 0)
         self.assertEqual(self.page.evaluate(self.model()+'.id'), model_id)
@@ -571,3 +588,57 @@ class EditorBrowserTests(unittest.TestCase):
         self.page.evaluate("app.sessions.setWorkspace('/other')")
         expect(self.page.locator('#gitDiffPane')).not_to_be_visible()
         self.assertEqual(self.page.evaluate("testMonaco.editor.getModels().filter(m=>m.uri.scheme==='git-view').length"), 0)
+
+    def test_commit_history_pagination_details_draft_and_fixed_layout(self):
+        self.page.evaluate(self.model()+".setValue('keep this draft')")
+        self.page.locator('#activityGit').click()
+        widths = [self.page.locator(selector).bounding_box()['width'] for selector in ('#editorPane', '#chat')]
+        self.page.locator('#gitHistoryTab').click()
+        expect(self.page.locator('.git-commit')).to_have_count(50)
+        expect(self.page.locator('#gitChanges')).not_to_be_visible()
+        self.page.locator('#gitLoadMore').click()
+        expect(self.page.locator('.git-commit')).to_have_count(52)
+        expect(self.page.locator('#gitLoadMore')).not_to_be_visible()
+        self.page.locator('.git-commit').last.scroll_into_view_if_needed()
+        scroll = self.page.locator('#gitHistory').evaluate('el=>el.scrollTop')
+        self.page.locator('.git-commit').last.click()
+        expect(self.page.locator('#gitCommitMessage')).to_contain_text('<script>不会执行</script>')
+        expect(self.page.locator('#gitCommitBase')).to_contain_text('第一个父提交')
+        expect(self.page.locator('#gitCommitFiles')).to_contain_text('src/old.cpp → src/main.cpp')
+        self.page.locator('#gitCommitFiles .git-file').first.click()
+        expect(self.page.locator('#gitOriginalLabel')).to_have_text('提交前 bbbbbbbb')
+        self.assertEqual(self.page.evaluate("testMonaco.editor.getModels().filter(m=>m.uri.scheme==='git-view').map(m=>m.getValue())"), ['historical before\n', 'historical after\n'])
+        expect(self.page.locator('#saveFile')).to_be_disabled()
+        self.assertEqual(self.page.evaluate(self.model()+'.getValue()'), 'keep this draft')
+        for i, selector in enumerate(('#editorPane', '#chat')):
+            self.assertAlmostEqual(self.page.locator(selector).bounding_box()['width'], widths[i], delta=1)
+        self.page.screenshot(path=str(Path(tempfile.gettempdir())/'codex-web-commit-history.png'))
+        self.page.locator('#gitCommitFiles .git-file').last.click()
+        expect(self.page.locator('#editorNotice')).to_contain_text('二进制')
+        self.page.locator('#gitHistoryBack').click()
+        expect(self.page.locator('.git-commit')).to_have_count(52)
+        self.assertAlmostEqual(self.page.locator('#gitHistory').evaluate('el=>el.scrollTop'), scroll, delta=2)
+        expect(self.page.locator('#gitDiffPane')).not_to_be_visible()
+        self.page.locator('#gitChangesTab').click()
+        expect(self.page.locator('#gitChanges .git-file')).to_have_count(3)
+        self.page.locator('#gitHistoryTab').click()
+        expect(self.page.locator('.git-commit')).to_have_count(52)
+        self.assertEqual(self.page.evaluate(self.model()+'.getValue()'), 'keep this draft')
+
+    def test_commit_history_empty_and_late_response_after_workspace_change(self):
+        self.page.locator('#activityGit').click();self.page.locator('#gitHistoryTab').click()
+        expect(self.page.locator('.git-commit')).to_have_count(50)
+        pending = []
+        self.page.route('**/api/git/commit?*', lambda route: pending.append(route))
+        self.page.locator('.git-commit').first.click()
+        self.page.wait_for_function("document.getElementById('gitNotice').textContent.includes('提交详情')")
+        self.server.git_history = []
+        self.page.evaluate("app.sessions.setWorkspace('/other')")
+        expect(self.page.locator('#gitNotice')).to_contain_text('没有提交记录')
+        self.assertEqual(len(pending), 1)
+        pending[0].fulfill(json=dict(id='a'*40, author='stale', date='2026-11-05', message='stale', parents=[], base=None, entries=[]))
+        expect(self.page.locator('#gitCommitDetail')).not_to_be_visible()
+        expect(self.page.locator('.git-commit')).to_have_count(0)
+        self.page.route('**/api/git/history?*', lambda route: route.fulfill(json=dict(repository=False, commits=[], head=None, nextOffset=None)))
+        self.page.locator('#refreshGit').click()
+        expect(self.page.locator('#gitNotice')).to_contain_text('不是 Git 仓库')
